@@ -126,8 +126,23 @@ type AdminUser = {
   created_at: string;
 };
 
-type Area = { id: string; name: string; description: string | null };
-type Team = { id: string; area_id: string; name: string; description: string | null };
+type Area = {
+  id: string;
+  name: string;
+  description: string | null;
+  manager_id: string | null;
+  manager_name: string | null;
+  manager_role: string | null;
+};
+type Team = {
+  id: string;
+  area_id: string;
+  name: string;
+  description: string | null;
+  responsible_id: string | null;
+  responsible_name: string | null;
+  responsible_role: string | null;
+};
 
 export function RoleDashboard({ role }: { role: Role }) {
   const router = useRouter();
@@ -441,6 +456,53 @@ export function RoleDashboard({ role }: { role: Role }) {
     });
     if (error) setStructureError(error.message);
     else await refreshStructure();
+  };
+
+  const handleAreaManagerChange = async (areaId: string, userId: string) => {
+    if (!supabase) return;
+    setStructureError("");
+    const { error } = await supabase.rpc("update_area_manager", {
+      area_id: areaId,
+      target_user_id: userId || null,
+    });
+    if (error) {
+      setStructureError(error.message);
+      return;
+    }
+    const manager = users.find((user) => user.id === userId);
+    setAreas((currentAreas) =>
+      currentAreas.map((area) =>
+        area.id === areaId
+          ? { ...area, manager_id: userId || null, manager_name: manager?.full_name ?? null, manager_role: manager?.role ?? null }
+          : area,
+      ),
+    );
+  };
+
+  const handleTeamResponsibleChange = async (teamId: string, userId: string) => {
+    if (!supabase) return;
+    setStructureError("");
+    const { error } = await supabase.rpc("update_team_responsible", {
+      team_id: teamId,
+      target_user_id: userId || null,
+    });
+    if (error) {
+      setStructureError(error.message);
+      return;
+    }
+    const responsible = users.find((user) => user.id === userId);
+    setTeams((currentTeams) =>
+      currentTeams.map((team) =>
+        team.id === teamId
+          ? {
+              ...team,
+              responsible_id: userId || null,
+              responsible_name: responsible?.full_name ?? null,
+              responsible_role: responsible?.role ?? null,
+            }
+          : team,
+      ),
+    );
   };
 
   if (isCheckingSession) {
@@ -766,7 +828,22 @@ export function RoleDashboard({ role }: { role: Role }) {
                 {areas.map((area) => (
                   <div key={area.id} className="rounded-xl border border-[#252A31] bg-[#14171C] p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">{area.name}</p>
+                      <div>
+                        <p className="font-medium">{area.name}</p>
+                        <select
+                          aria-label={`Responsable de ${area.name}`}
+                          value={area.manager_id ?? ""}
+                          onChange={(event) => void handleAreaManagerChange(area.id, event.target.value)}
+                          className="mt-2 max-w-52 rounded-lg border border-[#252A31] bg-[#0B0D10] px-2 py-1.5 text-xs text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                        >
+                          <option value="">Sin manager</option>
+                          {users.filter((user) => user.area_id === area.id).map((user) => (
+                            <option key={user.id} value={user.id}>
+                              {user.full_name || user.email || "Sin nombre"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <button type="button" onClick={() => void handleDeleteStructureItem("area", area.id)} className="text-xs text-red-300 hover:text-red-200">
                         Eliminar
                       </button>
@@ -774,7 +851,22 @@ export function RoleDashboard({ role }: { role: Role }) {
                     <ul className="mt-3 space-y-2">
                       {teams.filter((team) => team.area_id === area.id).map((team) => (
                         <li key={team.id} className="flex items-center justify-between rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm text-[#9CA3AF]">
-                          <span>{team.name}</span>
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="truncate">{team.name}</span>
+                            <select
+                              aria-label={`Responsable de ${team.name}`}
+                              value={team.responsible_id ?? ""}
+                              onChange={(event) => void handleTeamResponsibleChange(team.id, event.target.value)}
+                              className="max-w-44 rounded-lg border border-[#252A31] bg-[#14171C] px-2 py-1 text-xs text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                            >
+                              <option value="">Sin responsable</option>
+                              {users.filter((user) => user.team_id === team.id).map((user) => (
+                                <option key={user.id} value={user.id}>
+                                  {user.full_name || user.email || "Sin nombre"}
+                                </option>
+                              ))}
+                            </select>
+                          </span>
                           <button type="button" onClick={() => void handleDeleteStructureItem("team", team.id)} className="text-xs text-red-300 hover:text-red-200">
                             Eliminar
                           </button>

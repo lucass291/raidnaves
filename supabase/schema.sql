@@ -138,6 +138,12 @@ create table if not exists public.teams (
   unique (area_id, name)
 );
 
+alter table public.areas
+  add column if not exists manager_id uuid references public.profiles(id) on delete set null;
+
+alter table public.teams
+  add column if not exists responsible_id uuid references public.profiles(id) on delete set null;
+
 alter table public.areas enable row level security;
 alter table public.teams enable row level security;
 
@@ -164,8 +170,23 @@ begin
   end if;
 
   select json_build_object(
-    'areas', coalesce((select json_agg(a order by a.created_at) from public.areas a), '[]'::json),
-    'teams', coalesce((select json_agg(t order by t.created_at) from public.teams t), '[]'::json)
+    'areas', coalesce((
+      select json_agg(json_build_object(
+        'id', a.id, 'name', a.name, 'description', a.description,
+        'manager_id', a.manager_id, 'manager_name', manager.full_name, 'manager_role', manager.role
+      ) order by a.created_at)
+      from public.areas a
+      left join public.profiles manager on manager.id = a.manager_id
+    ), '[]'::json),
+    'teams', coalesce((
+      select json_agg(json_build_object(
+        'id', t.id, 'area_id', t.area_id, 'name', t.name, 'description', t.description,
+        'responsible_id', t.responsible_id, 'responsible_name', responsible.full_name,
+        'responsible_role', responsible.role
+      ) order by t.created_at)
+      from public.teams t
+      left join public.profiles responsible on responsible.id = t.responsible_id
+    ), '[]'::json)
   ) into result;
   return result;
 end;
@@ -320,7 +341,53 @@ begin
 end;
 $$;
 
+create or replace function public.update_area_manager(area_id uuid, target_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Only administrators can manage structure';
+  end if;
+  if target_user_id is not null and not exists (
+    select 1 from public.profiles
+    where profiles.id = target_user_id and profiles.area_id = update_area_manager.area_id
+  ) then
+    raise exception 'The selected manager must be assigned to the selected area';
+  end if;
+  update public.areas set manager_id = target_user_id where public.areas.id = update_area_manager.area_id;
+  if not found then raise exception 'Area not found'; end if;
+end;
+$$;
+
+create or replace function public.update_team_responsible(team_id uuid, target_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Only administrators can manage structure';
+  end if;
+  if target_user_id is not null and not exists (
+    select 1 from public.profiles
+    where profiles.id = target_user_id and profiles.team_id = update_team_responsible.team_id
+  ) then
+    raise exception 'The selected responsible must be assigned to the selected team';
+  end if;
+  update public.teams set responsible_id = target_user_id where public.teams.id = update_team_responsible.team_id;
+  if not found then raise exception 'Team not found'; end if;
+end;
+$$;
+
 revoke all on function public.list_admin_users() from public;
 grant execute on function public.list_admin_users() to authenticated;
 revoke all on function public.update_user_assignment(uuid, uuid, uuid) from public;
 grant execute on function public.update_user_assignment(uuid, uuid, uuid) to authenticated;
+revoke all on function public.update_area_manager(uuid, uuid) from public;
+grant execute on function public.update_area_manager(uuid, uuid) to authenticated;
+revoke all on function public.update_team_responsible(uuid, uuid) from public;
+grant execute on function public.update_team_responsible(uuid, uuid) to authenticated;
