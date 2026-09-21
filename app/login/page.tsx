@@ -25,7 +25,7 @@ export default function LoginPage() {
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (signInError) {
-      setError("No se pudo iniciar sesión. Revisa el correo y la contraseña.");
+      setError(`No se pudo iniciar sesión: ${signInError.message}`);
       setIsSubmitting(false);
       return;
     }
