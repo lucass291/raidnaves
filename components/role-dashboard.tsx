@@ -124,6 +124,7 @@ type AdminUser = {
 export function RoleDashboard({ role }: { role: Role }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [currentUserId, setCurrentUserId] = useState("");
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersError, setUsersError] = useState("");
@@ -160,6 +161,7 @@ export function RoleDashboard({ role }: { role: Role }) {
       }
 
       setEmail(data.user.email ?? "");
+      setCurrentUserId(data.user.id);
 
       if (role === "admin") {
         const { data: adminUsers, error: usersQueryError } = await client.rpc("list_admin_users");
@@ -494,9 +496,10 @@ export function RoleDashboard({ role }: { role: Role }) {
                         <td className="px-3 py-4">
                           <select
                             value={user.role && isValidRole(user.role) ? user.role : "worker"}
-                            disabled={savingUserId === user.id}
+                            disabled={savingUserId === user.id || currentUserId === user.id}
                             onChange={(event) => void handleRoleChange(user.id, event.target.value)}
-                            className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition focus:border-[#00C878] disabled:opacity-60"
+                            title={currentUserId === user.id ? "No podés cambiar tu propio rol" : undefined}
+                            className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition focus:border-[#00C878] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {roleOptions.map((option) => (
                               <option key={option.value} value={option.value}>

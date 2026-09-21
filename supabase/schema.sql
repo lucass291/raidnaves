@@ -80,6 +80,10 @@ begin
     raise exception 'Only administrators can update roles';
   end if;
 
+  if target_user_id = auth.uid() then
+    raise exception 'Administrators cannot change their own role';
+  end if;
+
   if new_role not in ('admin', 'ceo', 'manager', 'worker') then
     raise exception 'Invalid role';
   end if;
