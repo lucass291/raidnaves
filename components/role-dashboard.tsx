@@ -29,7 +29,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { dashboardRouteByRole, roleLabels, type Role } from "@/lib/rbac";
+import { dashboardRouteByRole, isValidRole, roleLabels, roleOptions, type Role } from "@/lib/rbac";
 import { supabase } from "@/lib/supabase";
 
 const overviewByRole: Record<Role, { label: string; value: string; trend: string; detail: string }> = {
@@ -113,10 +113,21 @@ const priorityItems = [
   { name: "Cierre de incidencias", owner: "M. Díaz", status: "Listo" },
 ];
 
+type AdminUser = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  role: string | null;
+  created_at: string;
+};
+
 export function RoleDashboard({ role }: { role: Role }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [usersError, setUsersError] = useState("");
+  const [savingUserId, setSavingUserId] = useState("");
   const currentRole = roleLabels[role];
   const summary = overviewByRole[role];
 
@@ -149,6 +160,16 @@ export function RoleDashboard({ role }: { role: Role }) {
       }
 
       setEmail(data.user.email ?? "");
+
+      if (role === "admin") {
+        const { data: adminUsers, error: usersQueryError } = await client.rpc("list_admin_users");
+        if (usersQueryError) {
+          setUsersError(usersQueryError.message);
+        } else {
+          setUsers((adminUsers ?? []) as AdminUser[]);
+        }
+      }
+
       setIsCheckingSession(false);
     });
 
@@ -168,6 +189,26 @@ export function RoleDashboard({ role }: { role: Role }) {
     if (!supabase) return;
     await supabase.auth.signOut();
     router.replace("/login");
+  };
+
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    if (!supabase || !isValidRole(newRole)) return;
+
+    setSavingUserId(userId);
+    setUsersError("");
+    const { error: updateError } = await supabase.rpc("update_user_role", {
+      target_user_id: userId,
+      new_role: newRole,
+    });
+
+    if (updateError) {
+      setUsersError(updateError.message);
+    } else {
+      setUsers((currentUsers) =>
+        currentUsers.map((user) => (user.id === userId ? { ...user, role: newRole } : user)),
+      );
+    }
+    setSavingUserId("");
   };
 
   if (isCheckingSession) {
@@ -418,6 +459,62 @@ export function RoleDashboard({ role }: { role: Role }) {
               </div>
             </div>
           </section>
+
+          {role === "admin" ? (
+            <section className="mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Administración</p>
+                  <h3 className="mt-1 text-lg font-semibold">Usuarios y roles</h3>
+                </div>
+                <span className="text-sm text-[#9CA3AF]">{users.length} usuarios registrados</span>
+              </div>
+
+              {usersError ? (
+                <p role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+                  No se pudo actualizar la gestión de usuarios: {usersError}
+                </p>
+              ) : null}
+
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[620px] text-left text-sm">
+                  <thead className="border-b border-[#252A31] text-xs uppercase tracking-[0.12em] text-[#9CA3AF]">
+                    <tr>
+                      <th className="px-3 py-3 font-medium">Usuario</th>
+                      <th className="px-3 py-3 font-medium">Nombre</th>
+                      <th className="px-3 py-3 font-medium">Rol</th>
+                      <th className="px-3 py-3 font-medium">Alta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => (
+                      <tr key={user.id} className="border-b border-[#252A31] last:border-0">
+                        <td className="px-3 py-4 text-[#F5F5F5]">{user.email ?? "Sin correo"}</td>
+                        <td className="px-3 py-4 text-[#9CA3AF]">{user.full_name || "Sin nombre"}</td>
+                        <td className="px-3 py-4">
+                          <select
+                            value={user.role && isValidRole(user.role) ? user.role : "worker"}
+                            disabled={savingUserId === user.id}
+                            onChange={(event) => void handleRoleChange(user.id, event.target.value)}
+                            className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition focus:border-[#00C878] disabled:opacity-60"
+                          >
+                            {roleOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-4 text-[#9CA3AF]">
+                          {new Date(user.created_at).toLocaleDateString("es-AR")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
         </main>
       </div>
     </div>
