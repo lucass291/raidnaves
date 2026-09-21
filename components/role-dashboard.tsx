@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Bell,
@@ -28,6 +30,7 @@ import {
   YAxis,
 } from "recharts";
 import { dashboardRouteByRole, roleLabels, type Role } from "@/lib/rbac";
+import { supabase } from "@/lib/supabase";
 
 const overviewByRole: Record<Role, { label: string; value: string; trend: string; detail: string }> = {
   admin: {
@@ -111,8 +114,57 @@ const priorityItems = [
 ];
 
 export function RoleDashboard({ role }: { role: Role }) {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const currentRole = roleLabels[role];
   const summary = overviewByRole[role];
+
+  useEffect(() => {
+    if (!supabase) {
+      router.replace("/login");
+      return;
+    }
+
+    let isMounted = true;
+
+    void supabase.auth.getUser().then(({ data, error }) => {
+      if (!isMounted) return;
+
+      if (error || !data.user) {
+        router.replace("/login");
+        return;
+      }
+
+      setEmail(data.user.email ?? "");
+      setIsCheckingSession(false);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.replace("/login");
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const handleSignOut = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    router.replace("/login");
+  };
+
+  if (isCheckingSession) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#0B0D10] text-sm text-[#9CA3AF]">
+        Verificando sesión...
+      </main>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0B0D10] text-[#F5F5F5]">
@@ -181,10 +233,17 @@ export function RoleDashboard({ role }: { role: Role }) {
                   AR
                 </div>
                 <div className="hidden text-left sm:block">
-                  <p className="text-sm font-medium">Ana Rodríguez</p>
+                  <p className="max-w-48 truncate text-sm font-medium">{email}</p>
                   <p className="text-xs text-[#9CA3AF]">{currentRole}</p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="rounded-xl border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm text-[#9CA3AF] transition hover:border-[#00C878]/40 hover:text-white"
+              >
+                Salir
+              </button>
             </div>
           </header>
 

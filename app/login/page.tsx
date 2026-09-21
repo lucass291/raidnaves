@@ -3,18 +3,34 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Lock, ShieldCheck, Sparkles } from "lucide-react";
-import { dashboardRouteByRole, roleOptions, type Role } from "@/lib/rbac";
+import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [selectedRole, setSelectedRole] = useState<Role>("manager");
-  const [email, setEmail] = useState("ana.rodriguez@raidnaves.internal");
-  const [password, setPassword] = useState("••••••••");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    window.localStorage.setItem("internal-user-role", selectedRole);
-    router.push(dashboardRouteByRole[selectedRole]);
+    setError("");
+
+    if (!supabase || !hasSupabaseConfig) {
+      setError("Falta configurar Supabase. Crea un archivo .env.local con las variables indicadas en .env.example.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (signInError) {
+      setError("No se pudo iniciar sesión. Revisa el correo y la contraseña.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    router.push("/dashboard/worker");
   };
 
   return (
@@ -102,29 +118,18 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div>
-              <label htmlFor="role" className="mb-2 block text-sm font-medium text-[#F5F5F5]">
-                Iniciar como
-              </label>
-              <select
-                id="role"
-                value={selectedRole}
-                onChange={(event) => setSelectedRole(event.target.value as Role)}
-                className="w-full rounded-xl border border-[#252A31] bg-[#0B0D10] px-4 py-3 text-sm text-[#F5F5F5] outline-none transition focus:border-[#00C878]"
-              >
-                {roleOptions.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {error ? (
+              <p role="alert" className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                {error}
+              </p>
+            ) : null}
 
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00C878] px-4 py-3 text-sm font-semibold text-[#0B0D10] transition hover:bg-[#00b56f]"
+              disabled={isSubmitting}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00C878] px-4 py-3 text-sm font-semibold text-[#0B0D10] transition hover:bg-[#00b56f] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Continuar con Supabase Auth
+              {isSubmitting ? "Ingresando..." : "Iniciar sesión"}
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>
