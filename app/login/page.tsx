@@ -17,6 +17,7 @@ export default function LoginPage() {
     return (
       currentUrl.searchParams.get("type") === "invite" ||
       currentUrl.searchParams.has("code") ||
+      currentUrl.searchParams.has("token_hash") ||
       currentUrl.hash.includes("type=invite") ||
       currentUrl.hash.includes("access_token=")
     );
@@ -25,19 +26,52 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
-    if (!supabase) return;
+    const client = supabase;
+    if (!client) return;
 
     const hasInvitationMarker = () => {
       const currentUrl = new URL(window.location.href);
       return (
         currentUrl.searchParams.get("type") === "invite" ||
         currentUrl.searchParams.has("code") ||
+        currentUrl.searchParams.has("token_hash") ||
         currentUrl.hash.includes("type=invite") ||
         currentUrl.hash.includes("access_token=")
       );
     };
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+    const exchangeInvitationCode = async () => {
+      const currentUrl = new URL(window.location.href);
+      const code = currentUrl.searchParams.get("code");
+      const tokenHash = currentUrl.searchParams.get("token_hash");
+      let error;
+
+      if (code) {
+        ({ error } = await client.auth.exchangeCodeForSession(code));
+      } else if (tokenHash && currentUrl.searchParams.get("type") === "invite") {
+        ({ error } = await client.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: "invite",
+        }));
+      } else {
+        return;
+      }
+
+      if (error) {
+        setError(`No se pudo validar la invitación: ${error.message}`);
+        return;
+      }
+
+      setIsInvitation(true);
+      currentUrl.searchParams.delete("code");
+      currentUrl.searchParams.delete("token_hash");
+      currentUrl.searchParams.delete("type");
+      window.history.replaceState({}, "", currentUrl.toString());
+    };
+
+    void exchangeInvitationCode();
+
+    const { data: authListener } = client.auth.onAuthStateChange((event) => {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && hasInvitationMarker()) {
         setIsInvitation(true);
       }
