@@ -4,10 +4,6 @@ import { isValidRole, type Role } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
-const productionAppUrl =
-  process.env.NEXT_PUBLIC_APP_URL ??
-  "https://raidnaves-r2tzcbpqn-lucass291s-projects.vercel.app";
-
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -49,28 +45,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Solo un administrador puede invitar usuarios." }, { status: 403 });
   }
 
-  const body = (await request.json()) as { email?: string; fullName?: string; role?: string };
+  const body = (await request.json()) as { email?: string; fullName?: string; role?: string; temporaryPassword?: string };
   const email = body.email?.trim().toLowerCase();
   const fullName = body.fullName?.trim() ?? "";
   const role = body.role;
+  const temporaryPassword = body.temporaryPassword;
 
-  if (!email || !email.includes("@") || !role || !isValidRole(role)) {
-    return NextResponse.json({ error: "Completá un email válido y un rol válido." }, { status: 400 });
+  if (!email || !email.includes("@") || !role || !isValidRole(role) || !temporaryPassword || temporaryPassword.length < 8) {
+    return NextResponse.json({ error: "Completá un email, un rol y una contraseña provisoria de al menos 8 caracteres." }, { status: 400 });
   }
 
-  const { data: invitedUser, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-    data: { full_name: fullName },
-    redirectTo: `${productionAppUrl}/auth/callback`,
+  const { data: createdUser, error: createError } = await adminClient.auth.admin.createUser({
+    email,
+    password: temporaryPassword,
+    email_confirm: true,
+    user_metadata: { full_name: fullName },
   });
 
-  if (inviteError || !invitedUser.user) {
-    return NextResponse.json({ error: inviteError?.message ?? "No se pudo enviar la invitación." }, { status: 400 });
+  if (createError || !createdUser.user) {
+    return NextResponse.json({ error: createError?.message ?? "No se pudo crear el usuario." }, { status: 400 });
   }
 
   const { error: profileError } = await adminClient.from("profiles").upsert({
-    id: invitedUser.user.id,
+    id: createdUser.user.id,
     full_name: fullName,
     role: role as Role,
+    must_change_password: true,
   });
 
   if (profileError) {

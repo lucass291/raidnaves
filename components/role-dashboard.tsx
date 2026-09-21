@@ -136,6 +136,7 @@ export function RoleDashboard({ role }: { role: Role }) {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserName, setNewUserName] = useState("");
   const [newUserRole, setNewUserRole] = useState<Role>("worker");
+  const [temporaryPassword, setTemporaryPassword] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
   const [isInviting, setIsInviting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState("");
@@ -167,9 +168,14 @@ export function RoleDashboard({ role }: { role: Role }) {
 
       const { data: profile } = await client
         .from("profiles")
-        .select("role, full_name")
+        .select("role, full_name, must_change_password")
         .eq("id", data.user.id)
         .maybeSingle();
+
+      if (profile?.must_change_password) {
+        router.replace("/account/change-password");
+        return;
+      }
 
       if (profile?.role && profile.role !== role && profile.role in dashboardRouteByRole) {
         router.replace(dashboardRouteByRole[profile.role as Role]);
@@ -259,7 +265,12 @@ export function RoleDashboard({ role }: { role: Role }) {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email: newUserEmail, fullName: newUserName, role: newUserRole }),
+      body: JSON.stringify({
+        email: newUserEmail,
+        fullName: newUserName,
+        role: newUserRole,
+        temporaryPassword,
+      }),
     });
     const result = (await response.json()) as { error?: string };
 
@@ -270,6 +281,7 @@ export function RoleDashboard({ role }: { role: Role }) {
       setNewUserEmail("");
       setNewUserName("");
       setNewUserRole("worker");
+      setTemporaryPassword("");
       const { data: refreshedUsers } = await supabase.rpc("list_admin_users");
       setUsers((refreshedUsers ?? []) as AdminUser[]);
     }
@@ -720,7 +732,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                 <span className="text-sm text-[#9CA3AF]">{users.length} usuarios registrados</span>
               </div>
 
-              <form onSubmit={handleInviteUser} className="mt-5 grid gap-3 rounded-xl border border-[#252A31] bg-[#14171C] p-4 md:grid-cols-[1fr_1fr_0.8fr_auto] md:items-end">
+              <form onSubmit={handleInviteUser} className="mt-5 grid gap-3 rounded-xl border border-[#252A31] bg-[#14171C] p-4 md:grid-cols-[1fr_1fr_0.8fr_1fr_auto] md:items-end">
                 <label className="text-sm text-[#9CA3AF]">
                   Nombre
                   <input
@@ -752,6 +764,18 @@ export function RoleDashboard({ role }: { role: Role }) {
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
+                </label>
+                <label className="text-sm text-[#9CA3AF]">
+                  Contraseña provisoria
+                  <input
+                    required
+                    minLength={8}
+                    type="password"
+                    value={temporaryPassword}
+                    onChange={(event) => setTemporaryPassword(event.target.value)}
+                    className="mt-2 w-full rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                    placeholder="Mínimo 8 caracteres"
+                  />
                 </label>
                 <button
                   type="submit"

@@ -7,6 +7,9 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+alter table public.profiles
+  add column if not exists must_change_password boolean not null default false;
+
 alter table public.profiles enable row level security;
 
 drop policy if exists "Users can read their own profile" on public.profiles;
@@ -32,6 +35,22 @@ begin
   return new;
 end;
 $$;
+
+create or replace function public.complete_password_change()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.profiles
+  set must_change_password = false, updated_at = timezone('utc', now())
+  where id = auth.uid();
+end;
+$$;
+
+revoke all on function public.complete_password_change() from public;
+grant execute on function public.complete_password_change() to authenticated;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
