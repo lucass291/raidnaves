@@ -61,9 +61,9 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0B0D10] px-4 py-10 text-[#F5F5F5]">
-      <div className="grid w-full max-w-6xl overflow-hidden rounded-[28px] border border-[#252A31] bg-[#14171C] shadow-[0_0_0_1px_rgba(0,200,120,0.08)] lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="relative overflow-hidden border-b border-[#252A31] bg-[radial-gradient(circle_at_top_left,_rgba(0,200,120,0.18),_transparent_35%),_linear-gradient(135deg,#101418,#14171C_55%,#0B0D10)] p-8 lg:border-b-0 lg:border-r">
+    <main className="flex min-h-screen items-center justify-center bg-[#0B0D10] px-3 py-5 text-[#F5F5F5] sm:px-4 sm:py-10">
+      <div className="grid w-full max-w-6xl overflow-hidden rounded-2xl border border-[#252A31] bg-[#14171C] shadow-[0_0_0_1px_rgba(0,200,120,0.08)] sm:rounded-[28px] lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="relative overflow-hidden border-b border-[#252A31] bg-[radial-gradient(circle_at_top_left,_rgba(0,200,120,0.18),_transparent_35%),_linear-gradient(135deg,#101418,#14171C_55%,#0B0D10)] p-5 sm:p-8 lg:border-b-0 lg:border-r">
           <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-[#00C878]/10 blur-3xl" />
           <div className="relative z-10">
             <div className="mb-8 flex items-center gap-3">
@@ -82,7 +82,7 @@ export default function LoginPage() {
                   <Sparkles className="h-3.5 w-3.5" />
                   Multi-Área · Gobierno interno
                 </p>
-                <h2 className="mt-5 text-4xl font-semibold leading-tight tracking-tight">
+                <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
                   Control operacional para cada área del negocio.
                 </h2>
               </div>
@@ -107,10 +107,10 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <section className="p-8">
-          <div className="mb-8">
+        <section className="p-5 sm:p-8">
+          <div className="mb-6 sm:mb-8">
             <p className="text-sm uppercase tracking-[0.2em] text-[#9CA3AF]">Acceso</p>
-            <h3 className="mt-2 text-3xl font-semibold">Iniciar sesión</h3>
+            <h3 className="mt-2 text-2xl font-semibold sm:text-3xl">Iniciar sesión</h3>
           </div>
 
           <form className="space-y-5" onSubmit={handleSubmit}>

@@ -303,7 +303,7 @@ export function RoleDashboard({ role }: { role: Role }) {
 
   return (
     <div className="min-h-screen bg-[#0B0D10] text-[#F5F5F5]">
-      <div className="mx-auto flex max-w-[1600px] gap-6 px-4 py-6 md:px-6 xl:px-8">
+      <div className="mx-auto flex max-w-[1600px] gap-3 px-3 py-3 sm:gap-6 sm:px-4 sm:py-6 md:px-6 xl:px-8">
         <aside className="hidden w-72 rounded-2xl border border-[#252A31] bg-[#14171C] p-5 lg:block">
           <div className="mb-8 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#00C878]/15 text-[#00C878]">
@@ -348,14 +348,32 @@ export function RoleDashboard({ role }: { role: Role }) {
           </div>
         </aside>
 
-        <main className="flex-1 rounded-2xl border border-[#252A31] bg-[#14171C] p-4 md:p-6">
-          <header className="mb-6 flex flex-col gap-4 border-b border-[#252A31] pb-4 md:flex-row md:items-center md:justify-between">
+        <main className="min-w-0 flex-1 rounded-2xl border border-[#252A31] bg-[#14171C] p-3 sm:p-4 md:p-6">
+          <nav className="mb-4 flex gap-2 overflow-x-auto pb-1 lg:hidden" aria-label="Navegación principal">
+            {[
+              { label: "Inicio", icon: LayoutDashboard },
+              { label: "Operaciones", icon: BriefcaseBusiness },
+              { label: "Equipos", icon: Users },
+              { label: "Reportes", icon: TrendingUp },
+            ].map(({ label, icon: Icon }) => (
+              <button
+                key={label}
+                type="button"
+                className="flex shrink-0 items-center gap-2 rounded-xl border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-xs text-[#9CA3AF] transition hover:border-[#00C878]/40 hover:text-white"
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </nav>
+
+          <header className="mb-5 flex flex-col gap-4 border-b border-[#252A31] pb-4 sm:mb-6 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-sm uppercase tracking-[0.2em] text-[#9CA3AF]">Panel interno</p>
-              <h2 className="mt-1 text-2xl font-semibold">Bienvenido, {currentRole}</h2>
+              <h2 className="mt-1 text-xl font-semibold sm:text-2xl">Bienvenido, {currentRole}</h2>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 type="button"
                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#252A31] bg-[#0B0D10] text-[#F5F5F5]"
@@ -363,7 +381,7 @@ export function RoleDashboard({ role }: { role: Role }) {
               >
                 <Bell className="h-4 w-4" />
               </button>
-              <div className="flex items-center gap-3 rounded-xl border border-[#252A31] bg-[#0B0D10] px-3 py-2">
+              <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-[#252A31] bg-[#0B0D10] px-3 py-2 sm:flex-none">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#00C878]/20 text-sm font-semibold text-[#00C878]">
                   AR
                 </div>
@@ -386,7 +404,7 @@ export function RoleDashboard({ role }: { role: Role }) {
             <div className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
               <p className="text-sm text-[#9CA3AF]">{summary.label}</p>
               <div className="mt-4 flex items-end justify-between gap-3">
-                <span className="text-3xl font-semibold">{summary.value}</span>
+                <span className="text-2xl font-semibold sm:text-3xl">{summary.value}</span>
                 <span className="rounded-full bg-[#00C878]/10 px-2 py-1 text-xs font-medium text-[#00C878]">
                   {summary.trend}
                 </span>
@@ -449,11 +467,11 @@ export function RoleDashboard({ role }: { role: Role }) {
 
               <div className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Distribución por área</h3>
+                  <h3 className="text-base font-semibold sm:text-lg">Distribución por área</h3>
                   <span className="text-sm text-[#9CA3AF]">Mes actual</span>
                 </div>
                 <div className="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
-                  <div className="h-72">
+                  <div className="h-56 sm:h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={performanceData}>
                         <CartesianGrid stroke="#252A31" vertical={false} />
@@ -472,7 +490,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="h-72">
+                  <div className="h-64 sm:h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={workloadData} innerRadius={46} outerRadius={68} dataKey="value" paddingAngle={2}>
