@@ -6,18 +6,22 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const authorization = request.headers.get("authorization");
 
-  if (!supabaseUrl || !serviceRoleKey || !authorization?.startsWith("Bearer ")) {
+  if (!supabaseUrl || !anonKey || !serviceRoleKey || !authorization?.startsWith("Bearer ")) {
     return NextResponse.json({ error: "Configuración de invitaciones incompleta." }, { status: 500 });
   }
 
+  const userClient = createClient(supabaseUrl, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const accessToken = authorization.slice("Bearer ".length);
-  const { data: authData, error: authError } = await adminClient.auth.getUser(accessToken);
+  const { data: authData, error: authError } = await userClient.auth.getUser(accessToken);
 
   if (authError || !authData.user) {
     return NextResponse.json({ error: "Sesión inválida." }, { status: 401 });
