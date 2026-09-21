@@ -4,6 +4,10 @@ import { isValidRole, type Role } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
+const productionAppUrl =
+  process.env.NEXT_PUBLIC_APP_URL ??
+  "https://raidnaves-r2tzcbpqn-lucass291s-projects.vercel.app";
+
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -56,6 +60,7 @@ export async function POST(request: Request) {
 
   const { data: invitedUser, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
     data: { full_name: fullName },
+    redirectTo: `${productionAppUrl}/login`,
   });
 
   if (inviteError || !invitedUser.user) {
