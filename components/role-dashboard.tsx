@@ -317,8 +317,14 @@ export function RoleDashboard({ role }: { role: Role }) {
       setStructureError(error.message);
       return;
     }
-    setAreas((data?.areas ?? []) as Area[]);
+    const refreshedAreas = (data?.areas ?? []) as Area[];
+    setAreas(refreshedAreas);
     setTeams((data?.teams ?? []) as Team[]);
+    setTeamAreaId((currentAreaId) =>
+      refreshedAreas.some((area) => area.id === currentAreaId)
+        ? currentAreaId
+        : (refreshedAreas[0]?.id ?? ""),
+    );
   };
 
   const handleCreateArea = async (event: React.FormEvent<HTMLFormElement>) => {
