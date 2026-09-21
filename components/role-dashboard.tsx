@@ -129,6 +129,11 @@ export function RoleDashboard({ role }: { role: Role }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersError, setUsersError] = useState("");
   const [savingUserId, setSavingUserId] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserRole, setNewUserRole] = useState<Role>("worker");
+  const [inviteMessage, setInviteMessage] = useState("");
+  const [isInviting, setIsInviting] = useState(false);
   const currentRole = roleLabels[role];
   const summary = overviewByRole[role];
 
@@ -211,6 +216,45 @@ export function RoleDashboard({ role }: { role: Role }) {
       );
     }
     setSavingUserId("");
+  };
+
+  const handleInviteUser = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase) return;
+
+    setIsInviting(true);
+    setInviteMessage("");
+    setUsersError("");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setUsersError("La sesión expiró. Volvé a iniciar sesión.");
+      setIsInviting(false);
+      return;
+    }
+
+    const response = await fetch("/api/admin/invite-user", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: newUserEmail, fullName: newUserName, role: newUserRole }),
+    });
+    const result = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      setUsersError(result.error ?? "No se pudo enviar la invitación.");
+    } else {
+      setInviteMessage("Invitación enviada correctamente.");
+      setNewUserEmail("");
+      setNewUserName("");
+      setNewUserRole("worker");
+      const { data: refreshedUsers } = await supabase.rpc("list_admin_users");
+      setUsers((refreshedUsers ?? []) as AdminUser[]);
+    }
+    setIsInviting(false);
   };
 
   if (isCheckingSession) {
@@ -471,6 +515,49 @@ export function RoleDashboard({ role }: { role: Role }) {
                 </div>
                 <span className="text-sm text-[#9CA3AF]">{users.length} usuarios registrados</span>
               </div>
+
+              <form onSubmit={handleInviteUser} className="mt-5 grid gap-3 rounded-xl border border-[#252A31] bg-[#14171C] p-4 md:grid-cols-[1fr_1fr_0.8fr_auto] md:items-end">
+                <label className="text-sm text-[#9CA3AF]">
+                  Nombre
+                  <input
+                    value={newUserName}
+                    onChange={(event) => setNewUserName(event.target.value)}
+                    className="mt-2 w-full rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                    placeholder="Nombre completo"
+                  />
+                </label>
+                <label className="text-sm text-[#9CA3AF]">
+                  Email
+                  <input
+                    required
+                    type="email"
+                    value={newUserEmail}
+                    onChange={(event) => setNewUserEmail(event.target.value)}
+                    className="mt-2 w-full rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                    placeholder="usuario@empresa.com"
+                  />
+                </label>
+                <label className="text-sm text-[#9CA3AF]">
+                  Rol inicial
+                  <select
+                    value={newUserRole}
+                    onChange={(event) => setNewUserRole(event.target.value as Role)}
+                    className="mt-2 w-full rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                  >
+                    {roleOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="submit"
+                  disabled={isInviting}
+                  className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isInviting ? "Enviando..." : "Invitar"}
+                </button>
+              </form>
+              {inviteMessage ? <p className="mt-3 text-sm text-[#00C878]">{inviteMessage}</p> : null}
 
               {usersError ? (
                 <p role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
