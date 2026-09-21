@@ -119,6 +119,10 @@ type AdminUser = {
   email: string | null;
   full_name: string | null;
   role: string | null;
+  area_id: string | null;
+  area_name: string | null;
+  team_id: string | null;
+  team_name: string | null;
   created_at: string;
 };
 
@@ -238,6 +242,67 @@ export function RoleDashboard({ role }: { role: Role }) {
     } else {
       setUsers((currentUsers) =>
         currentUsers.map((user) => (user.id === userId ? { ...user, role: newRole } : user)),
+      );
+    }
+    setSavingUserId("");
+  };
+
+  const handleAssignmentChange = async (userId: string, areaId: string) => {
+    if (!supabase) return;
+
+    setSavingUserId(userId);
+    setUsersError("");
+    const user = users.find((item) => item.id === userId);
+    const selectedTeamId = user?.team_id && teams.some((team) => team.id === user.team_id && team.area_id === areaId)
+      ? user.team_id
+      : null;
+    const { error: updateError } = await supabase.rpc("update_user_assignment", {
+      target_user_id: userId,
+      new_area_id: areaId || null,
+      new_team_id: selectedTeamId,
+    });
+
+    if (updateError) {
+      setUsersError(updateError.message);
+    } else {
+      const area = areas.find((item) => item.id === areaId);
+      const team = selectedTeamId ? teams.find((item) => item.id === selectedTeamId) : undefined;
+      setUsers((currentUsers) =>
+        currentUsers.map((item) =>
+          item.id === userId
+            ? { ...item, area_id: areaId || null, area_name: area?.name ?? null, team_id: selectedTeamId, team_name: team?.name ?? null }
+            : item,
+        ),
+      );
+    }
+    setSavingUserId("");
+  };
+
+  const handleTeamAssignmentChange = async (userId: string, teamId: string) => {
+    if (!supabase) return;
+
+    const user = users.find((item) => item.id === userId);
+    const team = teams.find((item) => item.id === teamId);
+    if (!user || !team) return;
+
+    setSavingUserId(userId);
+    setUsersError("");
+    const { error: updateError } = await supabase.rpc("update_user_assignment", {
+      target_user_id: userId,
+      new_area_id: team.area_id,
+      new_team_id: team.id,
+    });
+
+    if (updateError) {
+      setUsersError(updateError.message);
+    } else {
+      const area = areas.find((item) => item.id === team.area_id);
+      setUsers((currentUsers) =>
+        currentUsers.map((item) =>
+          item.id === userId
+            ? { ...item, area_id: team.area_id, area_name: area?.name ?? null, team_id: team.id, team_name: team.name }
+            : item,
+        ),
       );
     }
     setSavingUserId("");
@@ -794,12 +859,14 @@ export function RoleDashboard({ role }: { role: Role }) {
               ) : null}
 
               <div className="mt-4 overflow-x-auto">
-                <table className="w-full min-w-[620px] text-left text-sm">
+                <table className="w-full min-w-[920px] text-left text-sm">
                   <thead className="border-b border-[#252A31] text-xs uppercase tracking-[0.12em] text-[#9CA3AF]">
                     <tr>
                       <th className="px-3 py-3 font-medium">Usuario</th>
                       <th className="px-3 py-3 font-medium">Nombre</th>
                       <th className="px-3 py-3 font-medium">Rol</th>
+                      <th className="px-3 py-3 font-medium">Área</th>
+                      <th className="px-3 py-3 font-medium">Equipo</th>
                       <th className="px-3 py-3 font-medium">Alta</th>
                       <th className="px-3 py-3 text-right font-medium">Acción</th>
                     </tr>
@@ -821,6 +888,30 @@ export function RoleDashboard({ role }: { role: Role }) {
                               <option key={option.value} value={option.value}>
                                 {option.label}
                               </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-4">
+                          <select
+                            value={user.area_id ?? ""}
+                            disabled={savingUserId === user.id}
+                            onChange={(event) => void handleAssignmentChange(user.id, event.target.value)}
+                            className="max-w-40 rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878] disabled:opacity-60"
+                          >
+                            <option value="">Sin área</option>
+                            {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+                          </select>
+                        </td>
+                        <td className="px-3 py-4">
+                          <select
+                            value={user.team_id ?? ""}
+                            disabled={savingUserId === user.id || !user.area_id}
+                            onChange={(event) => void handleTeamAssignmentChange(user.id, event.target.value)}
+                            className="max-w-40 rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878] disabled:opacity-60"
+                          >
+                            <option value="">Sin equipo</option>
+                            {teams.filter((team) => team.area_id === user.area_id).map((team) => (
+                              <option key={team.id} value={team.id}>{team.name}</option>
                             ))}
                           </select>
                         </td>

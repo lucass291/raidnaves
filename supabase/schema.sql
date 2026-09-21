@@ -235,3 +235,92 @@ revoke all on function public.delete_area(uuid) from public;
 grant execute on function public.delete_area(uuid) to authenticated;
 revoke all on function public.delete_team(uuid) from public;
 grant execute on function public.delete_team(uuid) to authenticated;
+
+alter table public.profiles
+  add column if not exists area_id uuid references public.areas(id) on delete set null,
+  add column if not exists team_id uuid references public.teams(id) on delete set null;
+
+drop function if exists public.list_admin_users();
+
+create or replace function public.list_admin_users()
+returns table (
+  id uuid,
+  email text,
+  full_name text,
+  role text,
+  area_id uuid,
+  area_name text,
+  team_id uuid,
+  team_name text,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.profiles
+    where profiles.id = auth.uid() and profiles.role = 'admin'
+  ) then
+    raise exception 'Only administrators can list users';
+  end if;
+
+  return query
+    select
+      u.id,
+      u.email::text,
+      p.full_name,
+      p.role,
+      p.area_id,
+      a.name,
+      p.team_id,
+      t.name,
+      p.created_at
+    from auth.users u
+    left join public.profiles p on p.id = u.id
+    left join public.areas a on a.id = p.area_id
+    left join public.teams t on t.id = p.team_id
+    order by p.created_at desc nulls last, u.created_at desc;
+end;
+$$;
+
+create or replace function public.update_user_assignment(
+  target_user_id uuid,
+  new_area_id uuid,
+  new_team_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.profiles
+    where profiles.id = auth.uid() and profiles.role = 'admin'
+  ) then
+    raise exception 'Only administrators can assign users';
+  end if;
+
+  if new_team_id is not null and not exists (
+    select 1 from public.teams
+    where teams.id = new_team_id and teams.area_id = new_area_id
+  ) then
+    raise exception 'The selected team does not belong to the selected area';
+  end if;
+
+  update public.profiles
+  set area_id = new_area_id, team_id = new_team_id, updated_at = timezone('utc', now())
+  where id = target_user_id;
+
+  if not found then
+    raise exception 'Profile not found';
+  end if;
+end;
+$$;
+
+revoke all on function public.list_admin_users() from public;
+grant execute on function public.list_admin_users() to authenticated;
+revoke all on function public.update_user_assignment(uuid, uuid, uuid) from public;
+grant execute on function public.update_user_assignment(uuid, uuid, uuid) to authenticated;
