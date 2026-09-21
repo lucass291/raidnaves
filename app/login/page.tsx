@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Lock, ShieldCheck, Sparkles } from "lucide-react";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
@@ -11,11 +11,42 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isInvitation] = useState(
-    () => typeof window !== "undefined" && window.location.hash.includes("type=invite"),
-  );
+  const [isInvitation, setIsInvitation] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const currentUrl = new URL(window.location.href);
+    return (
+      currentUrl.searchParams.get("type") === "invite" ||
+      currentUrl.searchParams.has("code") ||
+      currentUrl.hash.includes("type=invite") ||
+      currentUrl.hash.includes("access_token=")
+    );
+  });
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const hasInvitationMarker = () => {
+      const currentUrl = new URL(window.location.href);
+      return (
+        currentUrl.searchParams.get("type") === "invite" ||
+        currentUrl.searchParams.has("code") ||
+        currentUrl.hash.includes("type=invite") ||
+        currentUrl.hash.includes("access_token=")
+      );
+    };
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && hasInvitationMarker()) {
+        setIsInvitation(true);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
