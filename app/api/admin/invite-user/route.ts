@@ -27,13 +27,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sesión inválida." }, { status: 401 });
   }
 
-  const { data: requester, error: requesterError } = await adminClient
+  const sessionClient = createClient(supabaseUrl, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+  const { data: requester, error: requesterError } = await sessionClient
     .from("profiles")
     .select("role")
     .eq("id", authData.user.id)
     .maybeSingle();
 
-  if (requesterError || requester?.role !== "admin") {
+  if (requesterError) {
+    return NextResponse.json({ error: `No se pudo verificar el rol: ${requesterError.message}` }, { status: 500 });
+  }
+
+  if (requester?.role !== "admin") {
     return NextResponse.json({ error: "Solo un administrador puede invitar usuarios." }, { status: 403 });
   }
 
