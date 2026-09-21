@@ -121,14 +121,15 @@ export function RoleDashboard({ role }: { role: Role }) {
   const summary = overviewByRole[role];
 
   useEffect(() => {
-    if (!supabase) {
+    const client = supabase;
+    if (!client) {
       router.replace("/login");
       return;
     }
 
     let isMounted = true;
 
-    void supabase.auth.getUser().then(({ data, error }) => {
+    void client.auth.getUser().then(async ({ data, error }) => {
       if (!isMounted) return;
 
       if (error || !data.user) {
@@ -136,11 +137,22 @@ export function RoleDashboard({ role }: { role: Role }) {
         return;
       }
 
+      const { data: profile } = await client
+        .from("profiles")
+        .select("role, full_name")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (profile?.role && profile.role !== role && profile.role in dashboardRouteByRole) {
+        router.replace(dashboardRouteByRole[profile.role as Role]);
+        return;
+      }
+
       setEmail(data.user.email ?? "");
       setIsCheckingSession(false);
     });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         router.replace("/login");
       }
@@ -150,7 +162,7 @@ export function RoleDashboard({ role }: { role: Role }) {
       isMounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [router]);
+  }, [role, router]);
 
   const handleSignOut = async () => {
     if (!supabase) return;

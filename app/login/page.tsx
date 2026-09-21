@@ -30,6 +30,23 @@ export default function LoginPage() {
       return;
     }
 
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId ?? "")
+      .maybeSingle();
+
+    const role = profile?.role;
+    if (role === "admin" || role === "ceo" || role === "manager" || role === "worker") {
+      router.push(`/dashboard/${role}`);
+      return;
+    }
+
+    if (userId) {
+      await supabase.from("profiles").insert({ id: userId, role: "worker" });
+    }
     router.push("/dashboard/worker");
   };
 
