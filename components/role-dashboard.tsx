@@ -122,6 +122,9 @@ type AdminUser = {
   created_at: string;
 };
 
+type Area = { id: string; name: string; description: string | null };
+type Team = { id: string; area_id: string; name: string; description: string | null };
+
 export function RoleDashboard({ role }: { role: Role }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -136,6 +139,12 @@ export function RoleDashboard({ role }: { role: Role }) {
   const [inviteMessage, setInviteMessage] = useState("");
   const [isInviting, setIsInviting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState("");
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [structureError, setStructureError] = useState("");
+  const [areaName, setAreaName] = useState("");
+  const [teamName, setTeamName] = useState("");
+  const [teamAreaId, setTeamAreaId] = useState("");
   const currentRole = roleLabels[role];
   const summary = overviewByRole[role];
 
@@ -176,6 +185,14 @@ export function RoleDashboard({ role }: { role: Role }) {
           setUsersError(usersQueryError.message);
         } else {
           setUsers((adminUsers ?? []) as AdminUser[]);
+        }
+        const { data: structure, error: structureQueryError } = await client.rpc("list_admin_structure");
+        if (structureQueryError) {
+          setStructureError(structureQueryError.message);
+        } else {
+          setAreas((structure?.areas ?? []) as Area[]);
+          setTeams((structure?.teams ?? []) as Team[]);
+          setTeamAreaId((structure?.areas?.[0]?.id as string | undefined) ?? "");
         }
       }
 
@@ -291,6 +308,56 @@ export function RoleDashboard({ role }: { role: Role }) {
       setUsers((currentUsers) => currentUsers.filter((currentUser) => currentUser.id !== user.id));
     }
     setDeletingUserId("");
+  };
+
+  const refreshStructure = async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase.rpc("list_admin_structure");
+    if (error) {
+      setStructureError(error.message);
+      return;
+    }
+    setAreas((data?.areas ?? []) as Area[]);
+    setTeams((data?.teams ?? []) as Team[]);
+  };
+
+  const handleCreateArea = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase || !areaName.trim()) return;
+    setStructureError("");
+    const { error } = await supabase.rpc("create_area", { area_name: areaName, area_description: null });
+    if (error) setStructureError(error.message);
+    else {
+      setAreaName("");
+      await refreshStructure();
+    }
+  };
+
+  const handleCreateTeam = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase || !teamAreaId || !teamName.trim()) return;
+    setStructureError("");
+    const { error } = await supabase.rpc("create_team", {
+      team_area_id: teamAreaId,
+      team_name: teamName,
+      team_description: null,
+    });
+    if (error) setStructureError(error.message);
+    else {
+      setTeamName("");
+      await refreshStructure();
+    }
+  };
+
+  const handleDeleteStructureItem = async (kind: "area" | "team", id: string) => {
+    if (!supabase) return;
+    const confirmed = window.confirm("¿Eliminar este elemento? Esta acción no se puede deshacer.");
+    if (!confirmed) return;
+    const { error } = await supabase.rpc(kind === "area" ? "delete_area" : "delete_team", {
+      [kind === "area" ? "area_id" : "team_id"]: id,
+    });
+    if (error) setStructureError(error.message);
+    else await refreshStructure();
   };
 
   if (isCheckingSession) {
@@ -559,6 +626,83 @@ export function RoleDashboard({ role }: { role: Role }) {
               </div>
             </div>
           </section>
+
+          {role === "admin" ? (
+            <section className="mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Organización</p>
+                  <h3 className="mt-1 text-lg font-semibold">Áreas y equipos</h3>
+                </div>
+                <span className="text-sm text-[#9CA3AF]">{areas.length} áreas · {teams.length} equipos</span>
+              </div>
+
+              <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                <form onSubmit={handleCreateArea} className="flex gap-2">
+                  <input
+                    required
+                    value={areaName}
+                    onChange={(event) => setAreaName(event.target.value)}
+                    className="min-w-0 flex-1 rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                    placeholder="Nueva área"
+                  />
+                  <button type="submit" className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10]">
+                    Crear área
+                  </button>
+                </form>
+                <form onSubmit={handleCreateTeam} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                  <select
+                    required
+                    value={teamAreaId}
+                    onChange={(event) => setTeamAreaId(event.target.value)}
+                    className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                  >
+                    <option value="" disabled>Elegí un área</option>
+                    {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+                  </select>
+                  <input
+                    required
+                    value={teamName}
+                    onChange={(event) => setTeamName(event.target.value)}
+                    className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                    placeholder="Nuevo equipo"
+                  />
+                  <button type="submit" className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10]">
+                    Crear equipo
+                  </button>
+                </form>
+              </div>
+
+              {structureError ? (
+                <p role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+                  No se pudo actualizar la estructura: {structureError}
+                </p>
+              ) : null}
+
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                {areas.map((area) => (
+                  <div key={area.id} className="rounded-xl border border-[#252A31] bg-[#14171C] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium">{area.name}</p>
+                      <button type="button" onClick={() => void handleDeleteStructureItem("area", area.id)} className="text-xs text-red-300 hover:text-red-200">
+                        Eliminar
+                      </button>
+                    </div>
+                    <ul className="mt-3 space-y-2">
+                      {teams.filter((team) => team.area_id === area.id).map((team) => (
+                        <li key={team.id} className="flex items-center justify-between rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm text-[#9CA3AF]">
+                          <span>{team.name}</span>
+                          <button type="button" onClick={() => void handleDeleteStructureItem("team", team.id)} className="text-xs text-red-300 hover:text-red-200">
+                            Eliminar
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {role === "admin" ? (
             <section className="mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">

@@ -102,3 +102,117 @@ revoke all on function public.list_admin_users() from public;
 grant execute on function public.list_admin_users() to authenticated;
 revoke all on function public.update_user_role(uuid, text) from public;
 grant execute on function public.update_user_role(uuid, text) to authenticated;
+
+create table if not exists public.areas (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  description text,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.teams (
+  id uuid primary key default gen_random_uuid(),
+  area_id uuid not null references public.areas(id) on delete cascade,
+  name text not null,
+  description text,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (area_id, name)
+);
+
+alter table public.areas enable row level security;
+alter table public.teams enable row level security;
+
+drop policy if exists "Authenticated users can read areas" on public.areas;
+create policy "Authenticated users can read areas"
+  on public.areas for select to authenticated using (true);
+
+drop policy if exists "Authenticated users can read teams" on public.teams;
+create policy "Authenticated users can read teams"
+  on public.teams for select to authenticated using (true);
+
+create or replace function public.list_admin_structure()
+returns json
+language plpgsql
+security definer set search_path = public
+as $$
+declare result json;
+begin
+  if not exists (
+    select 1 from public.profiles
+    where profiles.id = auth.uid() and profiles.role = 'admin'
+  ) then
+    raise exception 'Only administrators can manage structure';
+  end if;
+
+  select json_build_object(
+    'areas', coalesce((select json_agg(a order by a.created_at) from public.areas a), '[]'::json),
+    'teams', coalesce((select json_agg(t order by t.created_at) from public.teams t), '[]'::json)
+  ) into result;
+  return result;
+end;
+$$;
+
+create or replace function public.create_area(area_name text, area_description text default null)
+returns public.areas
+language plpgsql security definer set search_path = public
+as $$
+declare created public.areas;
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Only administrators can manage structure';
+  end if;
+  insert into public.areas (name, description)
+  values (trim(area_name), nullif(trim(area_description), ''))
+  returning * into created;
+  return created;
+end;
+$$;
+
+create or replace function public.create_team(team_area_id uuid, team_name text, team_description text default null)
+returns public.teams
+language plpgsql security definer set search_path = public
+as $$
+declare created public.teams;
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Only administrators can manage structure';
+  end if;
+  insert into public.teams (area_id, name, description)
+  values (team_area_id, trim(team_name), nullif(trim(team_description), ''))
+  returning * into created;
+  return created;
+end;
+$$;
+
+create or replace function public.delete_area(area_id uuid)
+returns void language plpgsql security definer set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Only administrators can manage structure';
+  end if;
+  delete from public.areas where id = area_id;
+end;
+$$;
+
+create or replace function public.delete_team(team_id uuid)
+returns void language plpgsql security definer set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Only administrators can manage structure';
+  end if;
+  delete from public.teams where id = team_id;
+end;
+$$;
+
+revoke all on function public.list_admin_structure() from public;
+grant execute on function public.list_admin_structure() to authenticated;
+revoke all on function public.create_area(text, text) from public;
+grant execute on function public.create_area(text, text) to authenticated;
+revoke all on function public.create_team(uuid, text, text) from public;
+grant execute on function public.create_team(uuid, text, text) to authenticated;
+revoke all on function public.delete_area(uuid) from public;
+grant execute on function public.delete_area(uuid) to authenticated;
+revoke all on function public.delete_team(uuid) from public;
+grant execute on function public.delete_team(uuid) to authenticated;
