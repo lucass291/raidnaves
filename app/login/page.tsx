@@ -30,13 +30,25 @@ export default function LoginPage() {
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
     const userId = userData.user?.id;
-    const { data: profile } = await supabase
+    if (userError || !userId) {
+      setError("La sesión se creó, pero no se pudo identificar el usuario.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role")
-      .eq("id", userId ?? "")
+      .eq("id", userId)
       .maybeSingle();
+
+    if (profileError) {
+      setError(`No se pudo leer el perfil de usuario: ${profileError.message}`);
+      setIsSubmitting(false);
+      return;
+    }
 
     const role = profile?.role;
     if (role === "admin" || role === "ceo" || role === "manager" || role === "worker") {
@@ -44,10 +56,8 @@ export default function LoginPage() {
       return;
     }
 
-    if (userId) {
-      await supabase.from("profiles").insert({ id: userId, role: "worker" });
-    }
-    router.push("/dashboard/worker");
+    setError("Tu usuario no tiene un perfil con rol asignado. Creá el perfil en Supabase antes de continuar.");
+    setIsSubmitting(false);
   };
 
   return (
