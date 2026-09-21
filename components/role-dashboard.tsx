@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   TrendingUp,
   Users,
+  X,
 } from "lucide-react";
 import {
   Area,
@@ -134,6 +135,7 @@ export function RoleDashboard({ role }: { role: Role }) {
   const [newUserRole, setNewUserRole] = useState<Role>("worker");
   const [inviteMessage, setInviteMessage] = useState("");
   const [isInviting, setIsInviting] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState("");
   const currentRole = roleLabels[role];
   const summary = overviewByRole[role];
 
@@ -255,6 +257,40 @@ export function RoleDashboard({ role }: { role: Role }) {
       setUsers((refreshedUsers ?? []) as AdminUser[]);
     }
     setIsInviting(false);
+  };
+
+  const handleDeleteUser = async (user: AdminUser) => {
+    if (!supabase || currentUserId === user.id) return;
+    const confirmed = window.confirm(`¿Eliminar a ${user.email ?? "este usuario"}? Esta acción no se puede deshacer.`);
+    if (!confirmed) return;
+
+    setDeletingUserId(user.id);
+    setUsersError("");
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setUsersError("La sesión expiró. Volvé a iniciar sesión.");
+      setDeletingUserId("");
+      return;
+    }
+
+    const response = await fetch("/api/admin/invite-user", {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ userId: user.id }),
+    });
+    const result = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      setUsersError(result.error ?? "No se pudo eliminar el usuario.");
+    } else {
+      setUsers((currentUsers) => currentUsers.filter((currentUser) => currentUser.id !== user.id));
+    }
+    setDeletingUserId("");
   };
 
   if (isCheckingSession) {
@@ -573,6 +609,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                       <th className="px-3 py-3 font-medium">Nombre</th>
                       <th className="px-3 py-3 font-medium">Rol</th>
                       <th className="px-3 py-3 font-medium">Alta</th>
+                      <th className="px-3 py-3 text-right font-medium">Acción</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -597,6 +634,18 @@ export function RoleDashboard({ role }: { role: Role }) {
                         </td>
                         <td className="px-3 py-4 text-[#9CA3AF]">
                           {new Date(user.created_at).toLocaleDateString("es-AR")}
+                        </td>
+                        <td className="px-3 py-4 text-right">
+                          <button
+                            type="button"
+                            aria-label={`Eliminar a ${user.email ?? "este usuario"}`}
+                            title={currentUserId === user.id ? "No podés eliminarte a vos mismo" : "Eliminar usuario"}
+                            disabled={currentUserId === user.id || deletingUserId === user.id}
+                            onClick={() => void handleDeleteUser(user)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-400/30 text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-30"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
                     ))}
