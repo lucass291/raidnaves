@@ -9,12 +9,17 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URL(window.location.href).searchParams.get("error") ?? "";
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isInvitation, setIsInvitation] = useState(() => {
     if (typeof window === "undefined") return false;
     const currentUrl = new URL(window.location.href);
     return (
+      currentUrl.searchParams.get("invite") === "1" ||
+      window.sessionStorage.getItem("raidnaves-invitation") === "1" ||
       currentUrl.searchParams.get("type") === "invite" ||
       currentUrl.searchParams.has("code") ||
       currentUrl.searchParams.has("token_hash") ||
@@ -32,6 +37,8 @@ export default function LoginPage() {
     const hasInvitationMarker = () => {
       const currentUrl = new URL(window.location.href);
       return (
+        currentUrl.searchParams.get("invite") === "1" ||
+        window.sessionStorage.getItem("raidnaves-invitation") === "1" ||
         currentUrl.searchParams.get("type") === "invite" ||
         currentUrl.searchParams.has("code") ||
         currentUrl.searchParams.has("token_hash") ||
@@ -70,7 +77,6 @@ export default function LoginPage() {
     };
 
     void exchangeInvitationCode();
-
     const { data: authListener } = client.auth.onAuthStateChange((event) => {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && hasInvitationMarker()) {
         setIsInvitation(true);

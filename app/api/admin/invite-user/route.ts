@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
   const { data: invitedUser, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
     data: { full_name: fullName },
-    redirectTo: `${productionAppUrl}/login`,
+    redirectTo: `${productionAppUrl}/auth/callback`,
   });
 
   if (inviteError || !invitedUser.user) {
