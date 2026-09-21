@@ -11,6 +11,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isInvitation] = useState(
+    () => typeof window !== "undefined" && window.location.hash.includes("type=invite"),
+  );
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -57,6 +62,57 @@ export default function LoginPage() {
     }
 
     setError("Tu usuario no tiene un perfil con rol asignado. Creá el perfil en Supabase antes de continuar.");
+    setIsSubmitting(false);
+  };
+
+  const handleInvitationPassword = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+
+    if (!supabase) {
+      setError("Falta configurar Supabase.");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    if (updateError) {
+      setError(`No se pudo guardar la contraseña: ${updateError.message}`);
+      setIsSubmitting(false);
+      return;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) {
+      setError("No se pudo identificar el usuario invitado.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+    const role = profile?.role;
+
+    if (role === "admin" || role === "ceo" || role === "manager" || role === "worker") {
+      router.push(`/dashboard/${role}`);
+      return;
+    }
+
+    setError("La contraseña se guardó, pero el perfil todavía no tiene un rol asignado.");
     setIsSubmitting(false);
   };
 
@@ -110,9 +166,61 @@ export default function LoginPage() {
         <section className="p-5 sm:p-8">
           <div className="mb-6 sm:mb-8">
             <p className="text-sm uppercase tracking-[0.2em] text-[#9CA3AF]">Acceso</p>
-            <h3 className="mt-2 text-2xl font-semibold sm:text-3xl">Iniciar sesión</h3>
+            <h3 className="mt-2 text-2xl font-semibold sm:text-3xl">
+              {isInvitation ? "Crear contraseña" : "Iniciar sesión"}
+            </h3>
           </div>
 
+          {isInvitation ? (
+            <form className="space-y-5" onSubmit={handleInvitationPassword}>
+              <p className="text-sm leading-6 text-[#9CA3AF]">
+                Tu invitación fue aceptada. Creá una contraseña para acceder a Raidnaves.
+              </p>
+              <div>
+                <label htmlFor="new-password" className="mb-2 block text-sm font-medium text-[#F5F5F5]">
+                  Nueva contraseña
+                </label>
+                <input
+                  id="new-password"
+                  required
+                  minLength={8}
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  className="w-full rounded-xl border border-[#252A31] bg-[#0B0D10] px-4 py-3 text-sm text-[#F5F5F5] outline-none transition focus:border-[#00C878]"
+                  placeholder="Mínimo 8 caracteres"
+                />
+              </div>
+              <div>
+                <label htmlFor="confirm-password" className="mb-2 block text-sm font-medium text-[#F5F5F5]">
+                  Repetir contraseña
+                </label>
+                <input
+                  id="confirm-password"
+                  required
+                  minLength={8}
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className="w-full rounded-xl border border-[#252A31] bg-[#0B0D10] px-4 py-3 text-sm text-[#F5F5F5] outline-none transition focus:border-[#00C878]"
+                  placeholder="Repetí la contraseña"
+                />
+              </div>
+              {error ? (
+                <p role="alert" className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                  {error}
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00C878] px-4 py-3 text-sm font-semibold text-[#0B0D10] transition hover:bg-[#00b56f] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? "Guardando..." : "Crear contraseña"}
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </form>
+          ) : (
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#F5F5F5]">
@@ -160,6 +268,7 @@ export default function LoginPage() {
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>
+          )}
         </section>
       </div>
     </main>
