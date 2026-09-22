@@ -1150,7 +1150,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                           )}
                         </td>
                         <td className="px-3 py-4">
-                          {adminView ? <select
+                          {adminView && !(role === "ceo" && user.role === "admin") ? <select
                             value={user.area_id ?? ""}
                             disabled={savingUserId === user.id}
                             onChange={(event) => void handleAssignmentChange(user.id, event.target.value)}
@@ -1161,7 +1161,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                           </select> : <span className="text-[#9CA3AF]">{user.area_name ?? "Sin área"}</span>}
                         </td>
                         <td className="px-3 py-4">
-                          {adminView ? <select
+                          {adminView && !(role === "ceo" && user.role === "admin") ? <select
                             value={user.team_id ?? ""}
                             disabled={savingUserId === user.id || !user.area_id}
                             onChange={(event) => void handleTeamAssignmentChange(user.id, event.target.value)}
@@ -1177,7 +1177,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                           {new Date(user.created_at).toLocaleDateString("es-AR")}
                         </td>
                         <td className="px-3 py-4 text-right">
-                          {managerView ? null : (
+                          {managerView || (role === "ceo" && user.role === "admin") ? null : (
                           <button
                             type="button"
                             aria-label={`Eliminar a ${user.email ?? "este usuario"}`}

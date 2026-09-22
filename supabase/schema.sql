@@ -396,6 +396,19 @@ begin
     raise exception 'Only administrators or CEOs can assign users';
   end if;
 
+  if exists (
+    select 1 from public.profiles requester
+    where requester.id = auth.uid()
+      and requester.role = 'ceo'
+      and exists (
+        select 1 from public.profiles target
+        where target.id = target_user_id
+          and target.role = 'admin'
+      )
+  ) then
+    raise exception 'CEOs cannot modify administrators';
+  end if;
+
   if new_team_id is not null and not exists (
     select 1 from public.teams
     where teams.id = new_team_id and teams.area_id = new_area_id

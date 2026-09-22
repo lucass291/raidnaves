@@ -152,6 +152,16 @@ export async function DELETE(request: Request) {
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  if (requester.role === "ceo") {
+    const { data: target } = await adminClient
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+    if (target?.role === "admin") {
+      return NextResponse.json({ error: "El CEO no puede modificar al administrador." }, { status: 403 });
+    }
+  }
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
 
   if (deleteError) {
