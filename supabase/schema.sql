@@ -395,3 +395,145 @@ revoke all on function public.update_area_manager(uuid, uuid) from public;
 grant execute on function public.update_area_manager(uuid, uuid) to authenticated;
 revoke all on function public.update_team_responsible(uuid, uuid) from public;
 grant execute on function public.update_team_responsible(uuid, uuid) to authenticated;
+
+-- Tasks and operations module
+create table if not exists public.tasks (
+  id uuid primary key default gen_random_uuid(),
+  title text not null check (char_length(trim(title)) between 1 and 200),
+  description text,
+  status text not null default 'pending' check (status in ('pending', 'in_progress', 'completed', 'cancelled')),
+  priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'urgent')),
+  area_id uuid references public.areas(id) on delete set null,
+  team_id uuid references public.teams(id) on delete set null,
+  assignee_id uuid references public.profiles(id) on delete set null,
+  created_by uuid not null references public.profiles(id) on delete restrict,
+  due_date date,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  constraint tasks_team_area_check check (team_id is null or area_id is not null)
+);
+
+create index if not exists tasks_status_idx on public.tasks(status);
+create index if not exists tasks_priority_idx on public.tasks(priority);
+create index if not exists tasks_area_id_idx on public.tasks(area_id);
+create index if not exists tasks_team_id_idx on public.tasks(team_id);
+create index if not exists tasks_assignee_id_idx on public.tasks(assignee_id);
+create index if not exists tasks_created_by_idx on public.tasks(created_by);
+create index if not exists tasks_due_date_idx on public.tasks(due_date);
+
+alter table public.tasks enable row level security;
+
+create or replace function public.list_tasks()
+returns table (
+  id uuid, title text, description text, status text, priority text,
+  area_id uuid, area_name text, team_id uuid, team_name text,
+  assignee_id uuid, assignee_name text, created_by uuid, creator_name text,
+  due_date date, created_at timestamptz, updated_at timestamptz
+)
+language plpgsql security definer set search_path = public
+as $$
+declare me public.profiles;
+begin
+  select * into me from public.profiles where profiles.id = auth.uid();
+  if me.id is null then raise exception 'Perfil no encontrado'; end if;
+  return query
+    select t.id, t.title, t.description, t.status, t.priority,
+      t.area_id, a.name, t.team_id, tm.name, t.assignee_id, assignee.full_name,
+      t.created_by, creator.full_name, t.due_date, t.created_at, t.updated_at
+    from public.tasks t
+    left join public.areas a on a.id = t.area_id
+    left join public.teams tm on tm.id = t.team_id
+    left join public.profiles assignee on assignee.id = t.assignee_id
+    left join public.profiles creator on creator.id = t.created_by
+    where me.role in ('admin', 'ceo')
+       or (me.role = 'manager' and (t.area_id = me.area_id or t.team_id = me.team_id))
+       or (me.role = 'worker' and (t.assignee_id = me.id or t.team_id = me.team_id))
+    order by t.due_date nulls last, t.created_at desc;
+end;
+$$;
+
+create or replace function public.list_task_options()
+returns json
+language plpgsql security definer set search_path = public
+as $$
+declare me public.profiles; result json;
+begin
+  select * into me from public.profiles where id = auth.uid();
+  if me.id is null then raise exception 'Perfil no encontrado'; end if;
+  select json_build_object(
+    'areas', coalesce((select json_agg(json_build_object('id', a.id, 'name', a.name) order by a.name)
+      from public.areas a where me.role in ('admin','ceo') or me.role = 'manager' and a.id = me.area_id), '[]'::json),
+    'teams', coalesce((select json_agg(json_build_object('id', tm.id, 'name', tm.name, 'area_id', tm.area_id) order by tm.name)
+      from public.teams tm where me.role in ('admin','ceo') or me.role = 'manager' and (tm.area_id = me.area_id or tm.id = me.team_id)), '[]'::json),
+    'assignees', coalesce((select json_agg(json_build_object('id', p.id, 'name', coalesce(p.full_name, 'Sin nombre'), 'area_id', p.area_id, 'team_id', p.team_id) order by p.full_name)
+      from public.profiles p where me.role in ('admin','ceo') or me.role = 'manager' and (p.area_id = me.area_id or p.team_id = me.team_id)), '[]'::json)
+  ) into result;
+  return result;
+end;
+$$;
+
+create or replace function public.create_task(
+  task_title text, task_description text default null, task_status text default 'pending',
+  task_priority text default 'medium', task_area_id uuid default null, task_team_id uuid default null,
+  task_assignee_id uuid default null, task_due_date date default null
+)
+returns public.tasks
+language plpgsql security definer set search_path = public
+as $$
+declare me public.profiles; created public.tasks;
+begin
+  select * into me from public.profiles where id = auth.uid();
+  if me.role is null or me.role not in ('admin','ceo','manager') then raise exception 'No tenés permisos para crear tareas'; end if;
+  if task_status not in ('pending','in_progress','completed','cancelled') or task_priority not in ('low','medium','high','urgent') then raise exception 'Estado o prioridad inválidos'; end if;
+  if task_team_id is not null and not exists (select 1 from public.teams where id = task_team_id and area_id = task_area_id) then raise exception 'El equipo no pertenece al área'; end if;
+  if task_assignee_id is not null and not exists (
+    select 1 from public.profiles p where p.id = task_assignee_id
+      and (task_team_id is null or p.team_id = task_team_id)
+      and (task_area_id is null or p.area_id = task_area_id)
+  ) then raise exception 'El responsable no pertenece al área o equipo seleccionado'; end if;
+  if me.role = 'manager' and not (coalesce(task_area_id = me.area_id, false) or coalesce(task_team_id = me.team_id, false)) then raise exception 'La tarea está fuera de tu alcance'; end if;
+  insert into public.tasks (title, description, status, priority, area_id, team_id, assignee_id, created_by, due_date)
+  values (trim(task_title), nullif(trim(task_description), ''), task_status, task_priority, task_area_id, task_team_id, task_assignee_id, me.id, task_due_date)
+  returning * into created;
+  return created;
+end;
+$$;
+
+create or replace function public.update_task_status(task_id uuid, new_status text)
+returns public.tasks
+language plpgsql security definer set search_path = public
+as $$
+declare me public.profiles; current_task public.tasks; updated public.tasks;
+begin
+  select * into me from public.profiles where id = auth.uid();
+  select * into current_task from public.tasks where id = task_id;
+  if current_task.id is null then raise exception 'Tarea no encontrada'; end if;
+  if new_status not in ('pending','in_progress','completed','cancelled') then raise exception 'Estado inválido'; end if;
+  if me.role = 'worker' and current_task.assignee_id is distinct from me.id then raise exception 'No podés cambiar esta tarea'; end if;
+  if me.role = 'manager' and not (coalesce(current_task.area_id = me.area_id, false) or coalesce(current_task.team_id = me.team_id, false)) then raise exception 'La tarea está fuera de tu alcance'; end if;
+  if me.role not in ('admin','ceo','manager','worker') then raise exception 'No tenés permisos'; end if;
+  update public.tasks set status = new_status, updated_at = timezone('utc', now()) where id = task_id returning * into updated;
+  return updated;
+end;
+$$;
+
+create or replace function public.delete_task(task_id uuid)
+returns void language plpgsql security definer set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then raise exception 'Solo administradores pueden eliminar tareas'; end if;
+  delete from public.tasks where id = task_id;
+end;
+$$;
+
+revoke all on public.tasks from anon, authenticated;
+revoke all on function public.list_tasks() from public;
+revoke all on function public.list_task_options() from public;
+revoke all on function public.create_task(text, text, text, text, uuid, uuid, uuid, date) from public;
+revoke all on function public.update_task_status(uuid, text) from public;
+revoke all on function public.delete_task(uuid) from public;
+grant execute on function public.list_tasks() to authenticated;
+grant execute on function public.list_task_options() to authenticated;
+grant execute on function public.create_task(text, text, text, text, uuid, uuid, uuid, date) to authenticated;
+grant execute on function public.update_task_status(uuid, text) to authenticated;
+grant execute on function public.delete_task(uuid) to authenticated;

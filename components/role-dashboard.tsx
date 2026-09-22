@@ -143,6 +143,13 @@ type Team = {
   responsible_name: string | null;
   responsible_role: string | null;
 };
+type Task = {
+  id: string; title: string; description: string | null; status: string; priority: string;
+  area_id: string | null; area_name: string | null; team_id: string | null; team_name: string | null;
+  assignee_id: string | null; assignee_name: string | null; created_by: string; creator_name: string | null;
+  due_date: string | null; created_at: string; updated_at: string;
+};
+type TaskOption = { id: string; name: string; area_id?: string; team_id?: string };
 
 export function RoleDashboard({ role }: { role: Role }) {
   const router = useRouter();
@@ -165,6 +172,19 @@ export function RoleDashboard({ role }: { role: Role }) {
   const [areaName, setAreaName] = useState("");
   const [teamName, setTeamName] = useState("");
   const [teamAreaId, setTeamAreaId] = useState("");
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskFilter, setTaskFilter] = useState("all");
+  const [taskError, setTaskError] = useState("");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDescription, setTaskDescription] = useState("");
+  const [taskPriority, setTaskPriority] = useState("medium");
+  const [taskAreaId, setTaskAreaId] = useState("");
+  const [taskTeamId, setTaskTeamId] = useState("");
+  const [taskAssigneeId, setTaskAssigneeId] = useState("");
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskAreas, setTaskAreas] = useState<TaskOption[]>([]);
+  const [taskTeams, setTaskTeams] = useState<TaskOption[]>([]);
+  const [taskAssignees, setTaskAssignees] = useState<TaskOption[]>([]);
   const currentRole = roleLabels[role];
   const summary = overviewByRole[role];
 
@@ -203,6 +223,15 @@ export function RoleDashboard({ role }: { role: Role }) {
 
       setEmail(data.user.email ?? "");
       setCurrentUserId(data.user.id);
+      const [{ data: taskData, error: taskQueryError }, { data: optionData }] = await Promise.all([
+        client.rpc("list_tasks"),
+        client.rpc("list_task_options"),
+      ]);
+      if (taskQueryError) setTaskError(taskQueryError.message);
+      else setTasks((taskData ?? []) as Task[]);
+      setTaskAreas((optionData?.areas ?? []) as TaskOption[]);
+      setTaskTeams((optionData?.teams ?? []) as TaskOption[]);
+      setTaskAssignees((optionData?.assignees ?? []) as TaskOption[]);
 
       if (role === "admin") {
         const { data: adminUsers, error: usersQueryError } = await client.rpc("list_admin_users");
@@ -505,6 +534,37 @@ export function RoleDashboard({ role }: { role: Role }) {
     );
   };
 
+  const refreshTasks = async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase.rpc("list_tasks");
+    if (error) setTaskError(error.message);
+    else setTasks((data ?? []) as Task[]);
+  };
+
+  const handleCreateTask = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase || !taskTitle.trim()) return;
+    setTaskError("");
+    const { error } = await supabase.rpc("create_task", {
+      task_title: taskTitle, task_description: taskDescription || null, task_status: "pending",
+      task_priority: taskPriority, task_area_id: taskAreaId || null, task_team_id: taskTeamId || null,
+      task_assignee_id: taskAssigneeId || null, task_due_date: taskDueDate || null,
+    });
+    if (error) setTaskError(error.message);
+    else {
+      setTaskTitle(""); setTaskDescription(""); setTaskDueDate(""); setTaskAssigneeId("");
+      await refreshTasks();
+    }
+  };
+
+  const handleTaskStatus = async (taskId: string, status: string) => {
+    if (!supabase) return;
+    setTaskError("");
+    const { error } = await supabase.rpc("update_task_status", { task_id: taskId, new_status: status });
+    if (error) setTaskError(error.message);
+    else await refreshTasks();
+  };
+
   if (isCheckingSession) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#0B0D10] text-sm text-[#9CA3AF]">
@@ -769,6 +829,60 @@ export function RoleDashboard({ role }: { role: Role }) {
                   ))}
                 </ul>
               </div>
+            </div>
+          </section>
+
+          <section className="mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Operaciones</p>
+                <h3 className="mt-1 text-lg font-semibold">Tareas</h3>
+              </div>
+              <select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)} className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5]">
+                <option value="all">Todos los estados</option>
+                <option value="pending">Pendientes</option>
+                <option value="in_progress">En curso</option>
+                <option value="completed">Completadas</option>
+                <option value="cancelled">Canceladas</option>
+              </select>
+            </div>
+
+            {role !== "worker" ? (
+              <form onSubmit={handleCreateTask} className="mt-4 grid gap-3 rounded-xl border border-[#252A31] bg-[#14171C] p-4 md:grid-cols-2 xl:grid-cols-4">
+                <input required value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Título de la tarea" className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm outline-none focus:border-[#00C878] md:col-span-2" />
+                <input value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} placeholder="Descripción (opcional)" className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm outline-none focus:border-[#00C878] md:col-span-2" />
+                <select value={taskPriority} onChange={(event) => setTaskPriority(event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
+                  <option value="low">Prioridad baja</option><option value="medium">Prioridad media</option><option value="high">Prioridad alta</option><option value="urgent">Urgente</option>
+                </select>
+                <select value={taskAreaId} onChange={(event) => { setTaskAreaId(event.target.value); setTaskTeamId(""); }} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
+                  <option value="">Sin área</option>{taskAreas.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <select value={taskTeamId} onChange={(event) => setTaskTeamId(event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
+                  <option value="">Sin equipo</option>{taskTeams.filter((item) => !taskAreaId || item.area_id === taskAreaId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <select value={taskAssigneeId} onChange={(event) => setTaskAssigneeId(event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
+                  <option value="">Sin asignar</option>{taskAssignees.filter((item) => (!taskAreaId || item.area_id === taskAreaId) && (!taskTeamId || item.team_id === taskTeamId)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <input type="date" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm" />
+                <button type="submit" className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10]">Crear tarea</button>
+              </form>
+            ) : null}
+
+            {taskError ? <p role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">{taskError}</p> : null}
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {tasks.filter((task) => taskFilter === "all" || task.status === taskFilter).map((task) => (
+                <article key={task.id} className="rounded-xl border border-[#252A31] bg-[#14171C] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0"><h4 className="truncate font-medium">{task.title}</h4><p className="mt-1 text-sm text-[#9CA3AF]">{task.description || "Sin descripción"}</p></div>
+                    <span className={`shrink-0 rounded-full px-2 py-1 text-xs ${task.priority === "urgent" ? "bg-red-400/15 text-red-300" : "bg-[#00C878]/10 text-[#00C878]"}`}>{task.priority}</span>
+                  </div>
+                  <p className="mt-3 text-xs text-[#9CA3AF]">{task.area_name || "Sin área"} · {task.team_name || "Sin equipo"} · {task.assignee_name || "Sin asignar"}{task.due_date ? ` · vence ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString("es-AR")}` : ""}</p>
+                  <select value={task.status} disabled={role === "worker" && task.assignee_id !== currentUserId} onChange={(event) => void handleTaskStatus(task.id, event.target.value)} className="mt-3 rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-xs text-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50">
+                    <option value="pending">Pendiente</option><option value="in_progress">En curso</option><option value="completed">Completada</option><option value="cancelled">Cancelada</option>
+                  </select>
+                </article>
+              ))}
+              {!tasks.some((task) => taskFilter === "all" || task.status === taskFilter) ? <p className="text-sm text-[#9CA3AF]">No hay tareas disponibles para tu alcance.</p> : null}
             </div>
           </section>
 
