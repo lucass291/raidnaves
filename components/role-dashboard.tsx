@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -176,6 +176,10 @@ export function RoleDashboard({ role }: { role: Role }) {
   const [teamAreaId, setTeamAreaId] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskFilter, setTaskFilter] = useState("all");
+  const [taskAreaFilter, setTaskAreaFilter] = useState("");
+  const [taskTeamFilter, setTaskTeamFilter] = useState("");
+  const [taskDueFrom, setTaskDueFrom] = useState("");
+  const [taskDueTo, setTaskDueTo] = useState("");
   const [taskError, setTaskError] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
@@ -589,6 +593,40 @@ export function RoleDashboard({ role }: { role: Role }) {
     else await refreshTasks();
   };
 
+  const filteredTaskTeams = useMemo(
+    () => taskTeams.filter((team) => !taskAreaFilter || team.area_id === taskAreaFilter),
+    [taskAreaFilter, taskTeams],
+  );
+  const visibleTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      if (taskFilter !== "all" && task.status !== taskFilter) return false;
+      if (taskAreaFilter && task.area_id !== taskAreaFilter) return false;
+      if (taskTeamFilter && task.team_id !== taskTeamFilter) return false;
+      if (taskDueFrom && (!task.due_date || task.due_date < taskDueFrom)) return false;
+      if (taskDueTo && (!task.due_date || task.due_date > taskDueTo)) return false;
+      return true;
+    });
+  }, [taskAreaFilter, taskDueFrom, taskDueTo, taskFilter, taskTeamFilter, tasks]);
+  const taskMetrics = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      total: visibleTasks.length,
+      pending: visibleTasks.filter((task) => task.status === "pending").length,
+      inProgress: visibleTasks.filter((task) => task.status === "in_progress").length,
+      completed: visibleTasks.filter((task) => task.status === "completed").length,
+      overdue: visibleTasks.filter(
+        (task) => Boolean(task.due_date && task.due_date < today && task.status !== "completed" && task.status !== "cancelled"),
+      ).length,
+    };
+  }, [visibleTasks]);
+  const clearTaskFilters = () => {
+    setTaskFilter("all");
+    setTaskAreaFilter("");
+    setTaskTeamFilter("");
+    setTaskDueFrom("");
+    setTaskDueTo("");
+  };
+
   if (isCheckingSession) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#0B0D10] text-sm text-[#9CA3AF]">
@@ -868,13 +906,51 @@ export function RoleDashboard({ role }: { role: Role }) {
                 <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Operaciones</p>
                 <h3 className="mt-1 text-lg font-semibold">Tareas</h3>
               </div>
-              <select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)} className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5]">
+              <button type="button" onClick={clearTaskFilters} className="flex items-center justify-center gap-2 rounded-lg border border-[#252A31] px-3 py-2 text-sm text-[#9CA3AF] hover:border-[#00C878] hover:text-[#F5F5F5]">
+                <X className="h-4 w-4" /> Limpiar filtros
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="rounded-xl border border-[#252A31] bg-[#14171C] p-3">
+                <p className="text-xs text-[#9CA3AF]">Total visibles</p><p className="mt-1 text-2xl font-semibold">{taskMetrics.total}</p>
+              </div>
+              <div className="rounded-xl border border-[#252A31] bg-[#14171C] p-3">
+                <p className="text-xs text-[#9CA3AF]">Pendientes</p><p className="mt-1 text-2xl font-semibold text-amber-300">{taskMetrics.pending}</p>
+              </div>
+              <div className="rounded-xl border border-[#252A31] bg-[#14171C] p-3">
+                <p className="text-xs text-[#9CA3AF]">En curso</p><p className="mt-1 text-2xl font-semibold text-blue-300">{taskMetrics.inProgress}</p>
+              </div>
+              <div className="rounded-xl border border-[#252A31] bg-[#14171C] p-3">
+                <p className="text-xs text-[#9CA3AF]">Completadas</p><p className="mt-1 text-2xl font-semibold text-[#00C878]">{taskMetrics.completed}</p>
+              </div>
+              <div className="rounded-xl border border-[#252A31] bg-[#14171C] p-3">
+                <p className="text-xs text-[#9CA3AF]">Vencidas</p><p className="mt-1 text-2xl font-semibold text-red-300">{taskMetrics.overdue}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <select value={taskAreaFilter} onChange={(event) => { setTaskAreaFilter(event.target.value); setTaskTeamFilter(""); }} aria-label="Filtrar por área" className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5]">
+                <option value="">Todas las áreas</option>
+                {taskAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+              </select>
+              <select value={taskTeamFilter} onChange={(event) => setTaskTeamFilter(event.target.value)} aria-label="Filtrar por equipo" className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5]">
+                <option value="">Todos los equipos</option>
+                {filteredTaskTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+              </select>
+              <select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)} aria-label="Filtrar por estado" className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5]">
                 <option value="all">Todos los estados</option>
                 <option value="pending">Pendientes</option>
                 <option value="in_progress">En curso</option>
                 <option value="completed">Completadas</option>
                 <option value="cancelled">Canceladas</option>
               </select>
+              <label className="flex items-center gap-2 rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#9CA3AF]">
+                Desde <input type="date" value={taskDueFrom} onChange={(event) => setTaskDueFrom(event.target.value)} aria-label="Fecha de vencimiento desde" className="min-w-0 bg-transparent text-[#F5F5F5]" />
+              </label>
+              <label className="flex items-center gap-2 rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#9CA3AF]">
+                Hasta <input type="date" value={taskDueTo} onChange={(event) => setTaskDueTo(event.target.value)} aria-label="Fecha de vencimiento hasta" className="min-w-0 bg-transparent text-[#F5F5F5]" />
+              </label>
             </div>
 
             {role !== "worker" ? (
@@ -900,7 +976,7 @@ export function RoleDashboard({ role }: { role: Role }) {
 
             {taskError ? <p role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">{taskError}</p> : null}
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {tasks.filter((task) => taskFilter === "all" || task.status === taskFilter).map((task) => (
+              {visibleTasks.map((task) => (
                 <article key={task.id} className="rounded-xl border border-[#252A31] bg-[#14171C] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0"><h4 className="truncate font-medium">{task.title}</h4><p className="mt-1 text-sm text-[#9CA3AF]">{task.description || "Sin descripción"}</p></div>
@@ -919,7 +995,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                   </div>
                 </article>
               ))}
-              {!tasks.some((task) => taskFilter === "all" || task.status === taskFilter) ? <p className="text-sm text-[#9CA3AF]">No hay tareas disponibles para tu alcance.</p> : null}
+              {visibleTasks.length === 0 ? <p className="text-sm text-[#9CA3AF]">No hay tareas disponibles para los filtros seleccionados.</p> : null}
             </div>
           </section>
 
