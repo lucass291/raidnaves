@@ -1131,7 +1131,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                         <td className="px-3 py-4 text-[#F5F5F5]">{user.email ?? "Sin correo"}</td>
                         <td className="px-3 py-4 text-[#9CA3AF]">{user.full_name || "Sin nombre"}</td>
                         <td className="px-3 py-4">
-                          {managerView ? (
+                          {managerView || (role === "ceo" && user.role === "admin") ? (
                             <span className="text-sm text-[#9CA3AF]">{user.role && isValidRole(user.role) ? roleLabels[user.role] : roleLabels.worker}</span>
                           ) : (
                           <select
@@ -1141,9 +1141,6 @@ export function RoleDashboard({ role }: { role: Role }) {
                             title={currentUserId === user.id ? "No podés cambiar tu propio rol" : undefined}
                             className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition focus:border-[#00C878] disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {role === "ceo" && user.role === "admin" ? (
-                              <option value="admin" disabled>{roleLabels.admin}</option>
-                            ) : null}
                             {assignableRoleOptions.map((option) => (
                               <option key={option.value} value={option.value}>
                                 {option.label}
