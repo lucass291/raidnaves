@@ -41,8 +41,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `No se pudo verificar el rol: ${requesterError.message}` }, { status: 500 });
   }
 
-  if (!requester || (requester.role !== "admin" && requester.role !== "manager")) {
-    return NextResponse.json({ error: "Solo un administrador o jefe de área puede invitar usuarios." }, { status: 403 });
+  if (!requester || (requester.role !== "admin" && requester.role !== "ceo" && requester.role !== "manager")) {
+    return NextResponse.json({ error: "Solo un administrador, CEO o jefe de área puede invitar usuarios." }, { status: 403 });
   }
 
   const body = (await request.json()) as {
@@ -60,6 +60,9 @@ export async function POST(request: Request) {
 
   if (!email || !email.includes("@") || !role || !isValidRole(role) || !temporaryPassword || temporaryPassword.length < 8) {
     return NextResponse.json({ error: "Completá un email, un rol y una contraseña provisoria de al menos 8 caracteres." }, { status: 400 });
+  }
+  if (requester.role === "ceo" && role === "admin") {
+    return NextResponse.json({ error: "Un CEO no puede crear usuarios Administradores." }, { status: 403 });
   }
 
   let areaId = body.areaId?.trim() || null;
@@ -135,8 +138,8 @@ export async function DELETE(request: Request) {
     .eq("id", authData.user.id)
     .maybeSingle();
 
-  if (requesterError || requester?.role !== "admin") {
-    return NextResponse.json({ error: "Solo un administrador puede eliminar usuarios." }, { status: 403 });
+  if (requesterError || (requester?.role !== "admin" && requester?.role !== "ceo")) {
+    return NextResponse.json({ error: "Solo un administrador o CEO puede eliminar usuarios." }, { status: 403 });
   }
 
   const body = (await request.json()) as { userId?: string };

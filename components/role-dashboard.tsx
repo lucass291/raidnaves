@@ -190,6 +190,8 @@ export function RoleDashboard({ role }: { role: Role }) {
   const currentRole = roleLabels[role];
   const summary = overviewByRole[role];
   const managerView = role === "manager";
+  const adminView = role === "admin" || role === "ceo";
+  const assignableRoleOptions = role === "ceo" ? roleOptions.filter((option) => option.value !== "admin") : roleOptions;
 
   useEffect(() => {
     const client = supabase;
@@ -236,16 +238,16 @@ export function RoleDashboard({ role }: { role: Role }) {
       setTaskTeams((optionData?.teams ?? []) as TaskOption[]);
       setTaskAssignees((optionData?.assignees ?? []) as TaskOption[]);
 
-      if (role === "admin" || role === "manager") {
+      if (adminView || role === "manager") {
         const { data: adminUsers, error: usersQueryError } = await client.rpc(
-          role === "admin" ? "list_admin_users" : "list_area_users",
+          adminView ? "list_admin_users" : "list_area_users",
         );
         if (usersQueryError) {
           setUsersError(usersQueryError.message);
         } else {
           setUsers((adminUsers ?? []) as AdminUser[]);
         }
-        if (role === "admin") {
+        if (adminView) {
           const { data: structure, error: structureQueryError } = await client.rpc("list_admin_structure");
           if (structureQueryError) {
             setStructureError(structureQueryError.message);
@@ -273,7 +275,7 @@ export function RoleDashboard({ role }: { role: Role }) {
       isMounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [role, router]);
+  }, [adminView, role, router]);
 
   const handleSignOut = async () => {
     if (!supabase) return;
@@ -404,7 +406,7 @@ export function RoleDashboard({ role }: { role: Role }) {
       setNewUserRole("worker");
       setNewUserTeamId("");
       setTemporaryPassword("");
-      const { data: refreshedUsers } = await supabase.rpc(role === "admin" ? "list_admin_users" : "list_area_users");
+      const { data: refreshedUsers } = await supabase.rpc(adminView ? "list_admin_users" : "list_area_users");
       setUsers((refreshedUsers ?? []) as AdminUser[]);
     }
     setIsInviting(false);
@@ -579,7 +581,7 @@ export function RoleDashboard({ role }: { role: Role }) {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    if (!supabase || role !== "admin") return;
+    if (!supabase || !adminView) return;
     if (!window.confirm("¿Eliminar esta tarea? Esta acción no se puede deshacer.")) return;
     setTaskError("");
     const { error } = await supabase.rpc("delete_task", { task_id: taskId });
@@ -909,7 +911,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                     <select value={task.status} disabled={role === "worker" && task.assignee_id !== currentUserId} onChange={(event) => void handleTaskStatus(task.id, event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-xs text-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50">
                       <option value="pending">Pendiente</option><option value="in_progress">En curso</option><option value="completed">Completada</option><option value="cancelled">Cancelada</option>
                     </select>
-                    {role === "admin" ? (
+                    {adminView ? (
                       <button type="button" onClick={() => void handleDeleteTask(task.id)} className="rounded-lg border border-red-400/30 px-3 py-2 text-xs text-red-300 hover:bg-red-400/10">
                         Eliminar
                       </button>
@@ -921,7 +923,7 @@ export function RoleDashboard({ role }: { role: Role }) {
             </div>
           </section>
 
-          {role === "admin" || role === "manager" ? (
+          {adminView || role === "manager" ? (
             <section className="mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -1028,12 +1030,12 @@ export function RoleDashboard({ role }: { role: Role }) {
             </section>
           ) : null}
 
-          {role === "admin" || role === "manager" ? (
+          {adminView || role === "manager" ? (
             <section className="mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Administración</p>
-                  <h3 className="mt-1 text-lg font-semibold">{role === "admin" ? "Usuarios y roles" : "Trabajadores de tu área"}</h3>
+                  <h3 className="mt-1 text-lg font-semibold">{adminView ? "Usuarios y roles" : "Trabajadores de tu área"}</h3>
                 </div>
                 <span className="text-sm text-[#9CA3AF]">{users.length} usuarios registrados</span>
               </div>
@@ -1070,14 +1072,14 @@ export function RoleDashboard({ role }: { role: Role }) {
                     placeholder="usuario@empresa.com"
                   />
                 </label>
-                {role === "admin" ? <label className="text-sm text-[#9CA3AF]">
+                {adminView ? <label className="text-sm text-[#9CA3AF]">
                   Rol inicial
                   <select
                     value={newUserRole}
                     onChange={(event) => setNewUserRole(event.target.value as Role)}
                     className="mt-2 w-full rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-[#F5F5F5] outline-none focus:border-[#00C878]"
                   >
-                    {roleOptions.map((option) => (
+                    {assignableRoleOptions.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
@@ -1099,7 +1101,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                   disabled={isInviting}
                   className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isInviting ? "Creando..." : "Crear trabajador"}
+                  {isInviting ? "Creando..." : adminView ? "Crear usuario" : "Crear trabajador"}
                 </button>
               </form>
               {inviteMessage ? <p className="mt-3 text-sm text-[#00C878]">{inviteMessage}</p> : null}
@@ -1130,7 +1132,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                         <td className="px-3 py-4 text-[#9CA3AF]">{user.full_name || "Sin nombre"}</td>
                         <td className="px-3 py-4">
                           {managerView ? (
-                            <span className="text-sm text-[#9CA3AF]">{roleLabels.worker}</span>
+                            <span className="text-sm text-[#9CA3AF]">{user.role && isValidRole(user.role) ? roleLabels[user.role] : roleLabels.worker}</span>
                           ) : (
                           <select
                             value={user.role && isValidRole(user.role) ? user.role : "worker"}
@@ -1139,7 +1141,10 @@ export function RoleDashboard({ role }: { role: Role }) {
                             title={currentUserId === user.id ? "No podés cambiar tu propio rol" : undefined}
                             className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none transition focus:border-[#00C878] disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {roleOptions.map((option) => (
+                            {role === "ceo" && user.role === "admin" ? (
+                              <option value="admin" disabled>{roleLabels.admin}</option>
+                            ) : null}
+                            {assignableRoleOptions.map((option) => (
                               <option key={option.value} value={option.value}>
                                 {option.label}
                               </option>
@@ -1148,7 +1153,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                           )}
                         </td>
                         <td className="px-3 py-4">
-                          {role === "admin" ? <select
+                          {adminView ? <select
                             value={user.area_id ?? ""}
                             disabled={savingUserId === user.id}
                             onChange={(event) => void handleAssignmentChange(user.id, event.target.value)}
@@ -1159,7 +1164,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                           </select> : <span className="text-[#9CA3AF]">{user.area_name ?? "Sin área"}</span>}
                         </td>
                         <td className="px-3 py-4">
-                          {role === "admin" ? <select
+                          {adminView ? <select
                             value={user.team_id ?? ""}
                             disabled={savingUserId === user.id || !user.area_id}
                             onChange={(event) => void handleTeamAssignmentChange(user.id, event.target.value)}

@@ -72,9 +72,9 @@ as $$
 begin
   if not exists (
     select 1 from public.profiles
-    where profiles.id = auth.uid() and profiles.role = 'admin'
+    where profiles.id = auth.uid() and profiles.role in ('admin', 'ceo')
   ) then
-    raise exception 'Only administrators can list users';
+    raise exception 'Only administrators or CEOs can list users';
   end if;
 
   return query
@@ -133,9 +133,9 @@ as $$
 begin
   if not exists (
     select 1 from public.profiles
-    where profiles.id = auth.uid() and profiles.role = 'admin'
+    where profiles.id = auth.uid() and profiles.role in ('admin', 'ceo')
   ) then
-    raise exception 'Only administrators can update roles';
+    raise exception 'Only administrators or CEOs can update roles';
   end if;
 
   if target_user_id = auth.uid() then
@@ -144,6 +144,11 @@ begin
 
   if new_role not in ('admin', 'ceo', 'manager', 'worker') then
     raise exception 'Invalid role';
+  end if;
+
+  if exists (select 1 from public.profiles where id = auth.uid() and role = 'ceo')
+     and new_role = 'admin' then
+    raise exception 'CEOs cannot assign the administrator role';
   end if;
 
   update public.profiles
@@ -231,9 +236,9 @@ declare result json;
 begin
   if not exists (
     select 1 from public.profiles
-    where profiles.id = auth.uid() and profiles.role = 'admin'
+    where profiles.id = auth.uid() and profiles.role in ('admin', 'ceo')
   ) then
-    raise exception 'Only administrators can manage structure';
+    raise exception 'Only administrators or CEOs can manage structure';
   end if;
 
   select json_build_object(
@@ -265,8 +270,8 @@ language plpgsql security definer set search_path = public
 as $$
 declare created public.areas;
 begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
-    raise exception 'Only administrators can manage structure';
+  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'ceo')) then
+    raise exception 'Only administrators or CEOs can manage structure';
   end if;
   insert into public.areas (name, description)
   values (trim(area_name), nullif(trim(area_description), ''))
@@ -281,8 +286,8 @@ language plpgsql security definer set search_path = public
 as $$
 declare created public.teams;
 begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
-    raise exception 'Only administrators can manage structure';
+  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'ceo')) then
+    raise exception 'Only administrators or CEOs can manage structure';
   end if;
   insert into public.teams (area_id, name, description)
   values (team_area_id, trim(team_name), nullif(trim(team_description), ''))
@@ -295,8 +300,8 @@ create or replace function public.delete_area(area_id uuid)
 returns void language plpgsql security definer set search_path = public
 as $$
 begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
-    raise exception 'Only administrators can manage structure';
+  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'ceo')) then
+    raise exception 'Only administrators or CEOs can manage structure';
   end if;
   delete from public.areas where id = area_id;
 end;
@@ -306,8 +311,8 @@ create or replace function public.delete_team(team_id uuid)
 returns void language plpgsql security definer set search_path = public
 as $$
 begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
-    raise exception 'Only administrators can manage structure';
+  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'ceo')) then
+    raise exception 'Only administrators or CEOs can manage structure';
   end if;
   delete from public.teams where id = team_id;
 end;
@@ -349,9 +354,9 @@ as $$
 begin
   if not exists (
     select 1 from public.profiles
-    where profiles.id = auth.uid() and profiles.role = 'admin'
+    where profiles.id = auth.uid() and profiles.role in ('admin', 'ceo')
   ) then
-    raise exception 'Only administrators can list users';
+    raise exception 'Only administrators or CEOs can list users';
   end if;
 
   return query
@@ -386,9 +391,9 @@ as $$
 begin
   if not exists (
     select 1 from public.profiles
-    where profiles.id = auth.uid() and profiles.role = 'admin'
+    where profiles.id = auth.uid() and profiles.role in ('admin', 'ceo')
   ) then
-    raise exception 'Only administrators can assign users';
+    raise exception 'Only administrators or CEOs can assign users';
   end if;
 
   if new_team_id is not null and not exists (
@@ -415,8 +420,8 @@ security definer
 set search_path = public
 as $$
 begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
-    raise exception 'Only administrators can manage structure';
+  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'ceo')) then
+    raise exception 'Only administrators or CEOs can manage structure';
   end if;
   if target_user_id is not null and not exists (
     select 1 from public.profiles
@@ -438,8 +443,8 @@ security definer
 set search_path = public
 as $$
 begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then
-    raise exception 'Only administrators can manage structure';
+  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'ceo')) then
+    raise exception 'Only administrators or CEOs can manage structure';
   end if;
   if target_user_id is not null and not exists (
     select 1 from public.profiles
@@ -534,8 +539,8 @@ begin
   return query
     select p.id, p.full_name, p.role, p.area_id, p.team_id,
       case p.role
-        when 'admin' then jsonb_build_object('read_scope', 'global', 'create_tasks', true, 'change_task_status', true, 'manage_users', true, 'manage_structure', true)
-        when 'ceo' then jsonb_build_object('read_scope', 'global', 'create_tasks', true, 'change_task_status', true, 'manage_users', false, 'manage_structure', false)
+        when 'admin' then jsonb_build_object('read_scope', 'global', 'create_tasks', true, 'change_task_status', true, 'manage_users', true, 'manage_structure', true, 'assign_admin_role', true)
+        when 'ceo' then jsonb_build_object('read_scope', 'global', 'create_tasks', true, 'change_task_status', true, 'manage_users', true, 'manage_structure', true, 'assign_admin_role', false)
         when 'manager' then jsonb_build_object('read_scope', 'assigned_area_or_team', 'create_tasks', true, 'change_task_status', true, 'manage_users', false, 'manage_structure', false)
         else jsonb_build_object('read_scope', 'own_or_team_tasks', 'create_tasks', false, 'change_task_status', true, 'manage_users', false, 'manage_structure', false)
       end
@@ -617,7 +622,7 @@ create or replace function public.delete_task(task_id uuid)
 returns void language plpgsql security definer set search_path = public
 as $$
 begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') then raise exception 'Solo administradores pueden eliminar tareas'; end if;
+  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'ceo')) then raise exception 'Solo administradores o CEOs pueden eliminar tareas'; end if;
   delete from public.tasks where id = task_id;
 end;
 $$;
