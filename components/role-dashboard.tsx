@@ -909,7 +909,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                     <select value={task.status} disabled={role === "worker" && task.assignee_id !== currentUserId} onChange={(event) => void handleTaskStatus(task.id, event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-xs text-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50">
                       <option value="pending">Pendiente</option><option value="in_progress">En curso</option><option value="completed">Completada</option><option value="cancelled">Cancelada</option>
                     </select>
-                    {role === "admin" || role === "manager" ? (
+                    {role === "admin" ? (
                       <button type="button" onClick={() => void handleDeleteTask(task.id)} className="rounded-lg border border-red-400/30 px-3 py-2 text-xs text-red-300 hover:bg-red-400/10">
                         Eliminar
                       </button>
@@ -1028,7 +1028,7 @@ export function RoleDashboard({ role }: { role: Role }) {
             </section>
           ) : null}
 
-          {role === "admin" ? (
+          {role === "admin" || role === "manager" ? (
             <section className="mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
