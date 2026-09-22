@@ -353,9 +353,11 @@ begin
   end if;
   if target_user_id is not null and not exists (
     select 1 from public.profiles
-    where profiles.id = target_user_id and profiles.area_id = update_area_manager.area_id
+    where profiles.id = target_user_id
+      and profiles.area_id = update_area_manager.area_id
+      and profiles.role in ('ceo', 'manager')
   ) then
-    raise exception 'The selected manager must be assigned to the selected area';
+    raise exception 'The area manager must have role CEO or Manager and belong to the selected area';
   end if;
   update public.areas set manager_id = target_user_id where public.areas.id = update_area_manager.area_id;
   if not found then raise exception 'Area not found'; end if;
@@ -374,9 +376,11 @@ begin
   end if;
   if target_user_id is not null and not exists (
     select 1 from public.profiles
-    where profiles.id = target_user_id and profiles.team_id = update_team_responsible.team_id
+    where profiles.id = target_user_id
+      and profiles.team_id = update_team_responsible.team_id
+      and profiles.role in ('ceo', 'manager')
   ) then
-    raise exception 'The selected responsible must be assigned to the selected team';
+    raise exception 'The team responsible must have role CEO or Manager and belong to the selected team';
   end if;
   update public.teams set responsible_id = target_user_id where public.teams.id = update_team_responsible.team_id;
   if not found then raise exception 'Team not found'; end if;

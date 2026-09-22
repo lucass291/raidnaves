@@ -837,7 +837,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                           className="mt-2 max-w-52 rounded-lg border border-[#252A31] bg-[#0B0D10] px-2 py-1.5 text-xs text-[#F5F5F5] outline-none focus:border-[#00C878]"
                         >
                           <option value="">Sin manager</option>
-                          {users.filter((user) => user.area_id === area.id).map((user) => (
+                          {users.filter((user) => user.area_id === area.id && (user.role === "ceo" || user.role === "manager")).map((user) => (
                             <option key={user.id} value={user.id}>
                               {user.full_name || user.email || "Sin nombre"}
                             </option>
@@ -860,7 +860,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                               className="max-w-44 rounded-lg border border-[#252A31] bg-[#14171C] px-2 py-1 text-xs text-[#F5F5F5] outline-none focus:border-[#00C878]"
                             >
                               <option value="">Sin responsable</option>
-                              {users.filter((user) => user.team_id === team.id).map((user) => (
+                              {users.filter((user) => user.team_id === team.id && (user.role === "ceo" || user.role === "manager")).map((user) => (
                                 <option key={user.id} value={user.id}>
                                   {user.full_name || user.email || "Sin nombre"}
                                 </option>
