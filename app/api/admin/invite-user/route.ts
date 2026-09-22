@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   });
   const { data: requester, error: requesterError } = await sessionClient
     .from("profiles")
-    .select("role")
+    .select("role, area_id")
     .eq("id", authData.user.id)
     .maybeSingle();
 
@@ -41,18 +41,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `No se pudo verificar el rol: ${requesterError.message}` }, { status: 500 });
   }
 
-  if (requester?.role !== "admin") {
-    return NextResponse.json({ error: "Solo un administrador puede invitar usuarios." }, { status: 403 });
+  if (!requester || (requester.role !== "admin" && requester.role !== "manager")) {
+    return NextResponse.json({ error: "Solo un administrador o jefe de área puede invitar usuarios." }, { status: 403 });
   }
 
-  const body = (await request.json()) as { email?: string; fullName?: string; role?: string; temporaryPassword?: string };
+  const body = (await request.json()) as {
+    email?: string;
+    fullName?: string;
+    role?: string;
+    temporaryPassword?: string;
+    areaId?: string;
+    teamId?: string;
+  };
   const email = body.email?.trim().toLowerCase();
   const fullName = body.fullName?.trim() ?? "";
-  const role = body.role;
+  const role = requester.role === "manager" ? "worker" : body.role;
   const temporaryPassword = body.temporaryPassword;
 
   if (!email || !email.includes("@") || !role || !isValidRole(role) || !temporaryPassword || temporaryPassword.length < 8) {
     return NextResponse.json({ error: "Completá un email, un rol y una contraseña provisoria de al menos 8 caracteres." }, { status: 400 });
+  }
+
+  let areaId = body.areaId?.trim() || null;
+  const teamId = body.teamId?.trim() || null;
+  if (requester.role === "manager") {
+    if (!requester.area_id) return NextResponse.json({ error: "El jefe de área no tiene un área asignada." }, { status: 403 });
+    if (body.areaId && body.areaId !== requester.area_id) {
+      return NextResponse.json({ error: "No podés asignar usuarios fuera de tu área." }, { status: 403 });
+    }
+    areaId = requester.area_id;
+  }
+  if (teamId) {
+    const { data: team } = await adminClient.from("teams").select("area_id").eq("id", teamId).maybeSingle();
+    if (!team || team.area_id !== areaId) {
+      return NextResponse.json({ error: "El equipo seleccionado no pertenece al área asignada." }, { status: 400 });
+    }
   }
 
   const { data: createdUser, error: createError } = await adminClient.auth.admin.createUser({
@@ -70,6 +93,8 @@ export async function POST(request: Request) {
     id: createdUser.user.id,
     full_name: fullName,
     role: role as Role,
+    area_id: areaId,
+    team_id: teamId,
     must_change_password: true,
   });
 

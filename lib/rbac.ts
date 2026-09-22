@@ -12,7 +12,7 @@ export const roleLabels: Record<Role, string> = {
 export const roleDescriptions: Record<Role, string> = {
   admin: "Acceso total: usuarios, estructura, equipos y tareas.",
   ceo: "Lectura global y gestión del ciclo de vida de las tareas.",
-  manager: "Operación de las tareas y datos de tu área o equipo asignado.",
+  manager: "Podés ver los trabajadores de tu área y crear nuevos trabajadores allí; no podés cambiar roles, eliminar usuarios ni modificar la estructura.",
   worker: "Tus tareas y las de tu equipo; solo podés actualizar tareas asignadas.",
 };
 

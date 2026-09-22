@@ -163,6 +163,8 @@ export function RoleDashboard({ role }: { role: Role }) {
   const [newUserName, setNewUserName] = useState("");
   const [newUserRole, setNewUserRole] = useState<Role>("worker");
   const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [newUserTeamId, setNewUserTeamId] = useState("");
+  const [managerAreaId, setManagerAreaId] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
   const [isInviting, setIsInviting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState("");
@@ -187,6 +189,7 @@ export function RoleDashboard({ role }: { role: Role }) {
   const [taskAssignees, setTaskAssignees] = useState<TaskOption[]>([]);
   const currentRole = roleLabels[role];
   const summary = overviewByRole[role];
+  const managerView = role === "manager";
 
   useEffect(() => {
     const client = supabase;
@@ -206,7 +209,7 @@ export function RoleDashboard({ role }: { role: Role }) {
       }
 
       const [{ data: profile }, { data: authProfile }] = await Promise.all([
-        client.from("profiles").select("role, full_name, must_change_password").eq("id", data.user.id).maybeSingle(),
+        client.from("profiles").select("role, full_name, area_id, must_change_password").eq("id", data.user.id).maybeSingle(),
         client.rpc("get_my_profile").maybeSingle(),
       ]);
 
@@ -233,20 +236,27 @@ export function RoleDashboard({ role }: { role: Role }) {
       setTaskTeams((optionData?.teams ?? []) as TaskOption[]);
       setTaskAssignees((optionData?.assignees ?? []) as TaskOption[]);
 
-      if (role === "admin") {
-        const { data: adminUsers, error: usersQueryError } = await client.rpc("list_admin_users");
+      if (role === "admin" || role === "manager") {
+        const { data: adminUsers, error: usersQueryError } = await client.rpc(
+          role === "admin" ? "list_admin_users" : "list_area_users",
+        );
         if (usersQueryError) {
           setUsersError(usersQueryError.message);
         } else {
           setUsers((adminUsers ?? []) as AdminUser[]);
         }
-        const { data: structure, error: structureQueryError } = await client.rpc("list_admin_structure");
-        if (structureQueryError) {
-          setStructureError(structureQueryError.message);
+        if (role === "admin") {
+          const { data: structure, error: structureQueryError } = await client.rpc("list_admin_structure");
+          if (structureQueryError) {
+            setStructureError(structureQueryError.message);
+          } else {
+            setAreas((structure?.areas ?? []) as Area[]);
+            setTeams((structure?.teams ?? []) as Team[]);
+            setTeamAreaId((structure?.areas?.[0]?.id as string | undefined) ?? "");
+          }
         } else {
-          setAreas((structure?.areas ?? []) as Area[]);
-          setTeams((structure?.teams ?? []) as Team[]);
-          setTeamAreaId((structure?.areas?.[0]?.id as string | undefined) ?? "");
+          const managerAreaId = (profile as { area_id?: string | null } | null)?.area_id;
+          setManagerAreaId(managerAreaId ?? "");
         }
       }
 
@@ -377,7 +387,9 @@ export function RoleDashboard({ role }: { role: Role }) {
       body: JSON.stringify({
         email: newUserEmail,
         fullName: newUserName,
-        role: newUserRole,
+        role: role === "manager" ? "worker" : newUserRole,
+        areaId: role === "manager" ? managerAreaId : undefined,
+        teamId: role === "manager" ? newUserTeamId : undefined,
         temporaryPassword,
       }),
     });
@@ -390,8 +402,9 @@ export function RoleDashboard({ role }: { role: Role }) {
       setNewUserEmail("");
       setNewUserName("");
       setNewUserRole("worker");
+      setNewUserTeamId("");
       setTemporaryPassword("");
-      const { data: refreshedUsers } = await supabase.rpc("list_admin_users");
+      const { data: refreshedUsers } = await supabase.rpc(role === "admin" ? "list_admin_users" : "list_area_users");
       setUsers((refreshedUsers ?? []) as AdminUser[]);
     }
     setIsInviting(false);
@@ -896,7 +909,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                     <select value={task.status} disabled={role === "worker" && task.assignee_id !== currentUserId} onChange={(event) => void handleTaskStatus(task.id, event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-xs text-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50">
                       <option value="pending">Pendiente</option><option value="in_progress">En curso</option><option value="completed">Completada</option><option value="cancelled">Cancelada</option>
                     </select>
-                    {role === "admin" ? (
+                    {role === "admin" || role === "manager" ? (
                       <button type="button" onClick={() => void handleDeleteTask(task.id)} className="rounded-lg border border-red-400/30 px-3 py-2 text-xs text-red-300 hover:bg-red-400/10">
                         Eliminar
                       </button>
@@ -908,7 +921,7 @@ export function RoleDashboard({ role }: { role: Role }) {
             </div>
           </section>
 
-          {role === "admin" ? (
+          {role === "admin" || role === "manager" ? (
             <section className="mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -1020,7 +1033,7 @@ export function RoleDashboard({ role }: { role: Role }) {
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Administración</p>
-                  <h3 className="mt-1 text-lg font-semibold">Usuarios y roles</h3>
+                  <h3 className="mt-1 text-lg font-semibold">{role === "admin" ? "Usuarios y roles" : "Trabajadores de tu área"}</h3>
                 </div>
                 <span className="text-sm text-[#9CA3AF]">{users.length} usuarios registrados</span>
               </div>
@@ -1035,6 +1048,17 @@ export function RoleDashboard({ role }: { role: Role }) {
                     placeholder="Nombre completo"
                   />
                 </label>
+                {managerView ? (
+                  <label className="text-sm text-[#9CA3AF]">
+                    Equipo (opcional)
+                    <select value={newUserTeamId} onChange={(event) => setNewUserTeamId(event.target.value)} className="mt-2 w-full rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-[#F5F5F5]">
+                      <option value="">Sin equipo</option>
+                      {taskTeams.filter((team) => !managerAreaId || team.area_id === managerAreaId).map((team) => (
+                        <option key={team.id} value={team.id}>{team.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <label className="text-sm text-[#9CA3AF]">
                   Email
                   <input
@@ -1046,7 +1070,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                     placeholder="usuario@empresa.com"
                   />
                 </label>
-                <label className="text-sm text-[#9CA3AF]">
+                {role === "admin" ? <label className="text-sm text-[#9CA3AF]">
                   Rol inicial
                   <select
                     value={newUserRole}
@@ -1057,7 +1081,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
-                </label>
+                </label> : null}
                 <label className="text-sm text-[#9CA3AF]">
                   Contraseña provisoria
                   <input
@@ -1075,7 +1099,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                   disabled={isInviting}
                   className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isInviting ? "Enviando..." : "Invitar"}
+                  {isInviting ? "Creando..." : "Crear trabajador"}
                 </button>
               </form>
               {inviteMessage ? <p className="mt-3 text-sm text-[#00C878]">{inviteMessage}</p> : null}
@@ -1105,6 +1129,9 @@ export function RoleDashboard({ role }: { role: Role }) {
                         <td className="px-3 py-4 text-[#F5F5F5]">{user.email ?? "Sin correo"}</td>
                         <td className="px-3 py-4 text-[#9CA3AF]">{user.full_name || "Sin nombre"}</td>
                         <td className="px-3 py-4">
+                          {managerView ? (
+                            <span className="text-sm text-[#9CA3AF]">{roleLabels.worker}</span>
+                          ) : (
                           <select
                             value={user.role && isValidRole(user.role) ? user.role : "worker"}
                             disabled={savingUserId === user.id || currentUserId === user.id}
@@ -1118,9 +1145,10 @@ export function RoleDashboard({ role }: { role: Role }) {
                               </option>
                             ))}
                           </select>
+                          )}
                         </td>
                         <td className="px-3 py-4">
-                          <select
+                          {role === "admin" ? <select
                             value={user.area_id ?? ""}
                             disabled={savingUserId === user.id}
                             onChange={(event) => void handleAssignmentChange(user.id, event.target.value)}
@@ -1128,10 +1156,10 @@ export function RoleDashboard({ role }: { role: Role }) {
                           >
                             <option value="">Sin área</option>
                             {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
-                          </select>
+                          </select> : <span className="text-[#9CA3AF]">{user.area_name ?? "Sin área"}</span>}
                         </td>
                         <td className="px-3 py-4">
-                          <select
+                          {role === "admin" ? <select
                             value={user.team_id ?? ""}
                             disabled={savingUserId === user.id || !user.area_id}
                             onChange={(event) => void handleTeamAssignmentChange(user.id, event.target.value)}
@@ -1141,12 +1169,13 @@ export function RoleDashboard({ role }: { role: Role }) {
                             {teams.filter((team) => team.area_id === user.area_id).map((team) => (
                               <option key={team.id} value={team.id}>{team.name}</option>
                             ))}
-                          </select>
+                          </select> : <span className="text-[#9CA3AF]">{user.team_name ?? "Sin equipo"}</span>}
                         </td>
                         <td className="px-3 py-4 text-[#9CA3AF]">
                           {new Date(user.created_at).toLocaleDateString("es-AR")}
                         </td>
                         <td className="px-3 py-4 text-right">
+                          {managerView ? null : (
                           <button
                             type="button"
                             aria-label={`Eliminar a ${user.email ?? "este usuario"}`}
@@ -1157,6 +1186,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                           >
                             <X className="h-4 w-4" />
                           </button>
+                          )}
                         </td>
                       </tr>
                     ))}

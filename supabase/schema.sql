@@ -85,6 +85,45 @@ begin
 end;
 $$;
 
+create or replace function public.list_area_users()
+returns table (
+  id uuid,
+  email text,
+  full_name text,
+  role text,
+  area_id uuid,
+  area_name text,
+  team_id uuid,
+  team_name text,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare manager_area_id uuid;
+begin
+  select p.area_id into manager_area_id
+  from public.profiles p
+  where p.id = auth.uid() and p.role = 'manager';
+
+  if manager_area_id is null then
+    raise exception 'Only area managers can list area users';
+  end if;
+
+  return query
+    select u.id, u.email::text, p.full_name, p.role, p.area_id, a.name,
+      p.team_id, t.name, p.created_at
+    from auth.users u
+    join public.profiles p on p.id = u.id
+    left join public.areas a on a.id = p.area_id
+    left join public.teams t on t.id = p.team_id
+    where p.area_id = manager_area_id
+      and p.role = 'worker'
+    order by p.created_at desc nulls last, u.created_at desc;
+end;
+$$;
+
 create or replace function public.update_user_role(target_user_id uuid, new_role text)
 returns void
 language plpgsql
@@ -119,6 +158,8 @@ $$;
 
 revoke all on function public.list_admin_users() from public;
 grant execute on function public.list_admin_users() to authenticated;
+revoke all on function public.list_area_users() from public;
+grant execute on function public.list_area_users() to authenticated;
 revoke all on function public.update_user_role(uuid, text) from public;
 grant execute on function public.update_user_role(uuid, text) to authenticated;
 
