@@ -147,13 +147,39 @@ alter table public.teams
 alter table public.areas enable row level security;
 alter table public.teams enable row level security;
 
+alter table public.profiles
+  add column if not exists area_id uuid references public.areas(id) on delete set null,
+  add column if not exists team_id uuid references public.teams(id) on delete set null;
+
 drop policy if exists "Authenticated users can read areas" on public.areas;
-create policy "Authenticated users can read areas"
-  on public.areas for select to authenticated using (true);
+drop policy if exists "Users can read permitted areas" on public.areas;
+create policy "Users can read permitted areas"
+  on public.areas for select to authenticated
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and (
+          p.role in ('admin', 'ceo')
+          or (p.role = 'manager' and p.area_id = areas.id)
+        )
+    )
+  );
 
 drop policy if exists "Authenticated users can read teams" on public.teams;
-create policy "Authenticated users can read teams"
-  on public.teams for select to authenticated using (true);
+drop policy if exists "Users can read permitted teams" on public.teams;
+create policy "Users can read permitted teams"
+  on public.teams for select to authenticated
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and (
+          p.role in ('admin', 'ceo')
+          or (p.role = 'manager' and (p.area_id = teams.area_id or p.team_id = teams.id))
+        )
+    )
+  );
 
 create or replace function public.list_admin_structure()
 returns json
@@ -452,6 +478,31 @@ begin
 end;
 $$;
 
+create or replace function public.get_my_profile()
+returns table (
+  id uuid,
+  full_name text,
+  role text,
+  area_id uuid,
+  team_id uuid,
+  permissions jsonb
+)
+language plpgsql security definer set search_path = public
+as $$
+begin
+  return query
+    select p.id, p.full_name, p.role, p.area_id, p.team_id,
+      case p.role
+        when 'admin' then jsonb_build_object('read_scope', 'global', 'create_tasks', true, 'change_task_status', true, 'manage_users', true, 'manage_structure', true)
+        when 'ceo' then jsonb_build_object('read_scope', 'global', 'create_tasks', true, 'change_task_status', true, 'manage_users', false, 'manage_structure', false)
+        when 'manager' then jsonb_build_object('read_scope', 'assigned_area_or_team', 'create_tasks', true, 'change_task_status', true, 'manage_users', false, 'manage_structure', false)
+        else jsonb_build_object('read_scope', 'own_or_team_tasks', 'create_tasks', false, 'change_task_status', true, 'manage_users', false, 'manage_structure', false)
+      end
+    from public.profiles p
+    where p.id = auth.uid();
+end;
+$$;
+
 create or replace function public.list_task_options()
 returns json
 language plpgsql security definer set search_path = public
@@ -484,6 +535,7 @@ declare me public.profiles; created public.tasks;
 begin
   select * into me from public.profiles where id = auth.uid();
   if me.role is null or me.role not in ('admin','ceo','manager') then raise exception 'No tenés permisos para crear tareas'; end if;
+  if nullif(trim(task_title), '') is null then raise exception 'El título es obligatorio'; end if;
   if task_status not in ('pending','in_progress','completed','cancelled') or task_priority not in ('low','medium','high','urgent') then raise exception 'Estado o prioridad inválidos'; end if;
   if task_team_id is not null and not exists (select 1 from public.teams where id = task_team_id and area_id = task_area_id) then raise exception 'El equipo no pertenece al área'; end if;
   if task_assignee_id is not null and not exists (
@@ -491,7 +543,10 @@ begin
       and (task_team_id is null or p.team_id = task_team_id)
       and (task_area_id is null or p.area_id = task_area_id)
   ) then raise exception 'El responsable no pertenece al área o equipo seleccionado'; end if;
-  if me.role = 'manager' and not (coalesce(task_area_id = me.area_id, false) or coalesce(task_team_id = me.team_id, false)) then raise exception 'La tarea está fuera de tu alcance'; end if;
+  if me.role = 'manager' and not (
+    (task_area_id is not null and task_area_id = me.area_id)
+    or (task_team_id is not null and task_team_id = me.team_id)
+  ) then raise exception 'La tarea está fuera de tu alcance'; end if;
   insert into public.tasks (title, description, status, priority, area_id, team_id, assignee_id, created_by, due_date)
   values (trim(task_title), nullif(trim(task_description), ''), task_status, task_priority, task_area_id, task_team_id, task_assignee_id, me.id, task_due_date)
   returning * into created;
@@ -528,11 +583,13 @@ $$;
 
 revoke all on public.tasks from anon, authenticated;
 revoke all on function public.list_tasks() from public;
+revoke all on function public.get_my_profile() from public;
 revoke all on function public.list_task_options() from public;
 revoke all on function public.create_task(text, text, text, text, uuid, uuid, uuid, date) from public;
 revoke all on function public.update_task_status(uuid, text) from public;
 revoke all on function public.delete_task(uuid) from public;
 grant execute on function public.list_tasks() to authenticated;
+grant execute on function public.get_my_profile() to authenticated;
 grant execute on function public.list_task_options() to authenticated;
 grant execute on function public.create_task(text, text, text, text, uuid, uuid, uuid, date) to authenticated;
 grant execute on function public.update_task_status(uuid, text) to authenticated;

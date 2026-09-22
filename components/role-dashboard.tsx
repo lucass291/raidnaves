@@ -30,7 +30,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { dashboardRouteByRole, isValidRole, roleLabels, roleOptions, type Role } from "@/lib/rbac";
+import { dashboardRouteByRole, isValidRole, roleDescriptions, roleLabels, roleOptions, type Role } from "@/lib/rbac";
 import { supabase } from "@/lib/supabase";
 
 const overviewByRole: Record<Role, { label: string; value: string; trend: string; detail: string }> = {
@@ -205,19 +205,19 @@ export function RoleDashboard({ role }: { role: Role }) {
         return;
       }
 
-      const { data: profile } = await client
-        .from("profiles")
-        .select("role, full_name, must_change_password")
-        .eq("id", data.user.id)
-        .maybeSingle();
+      const [{ data: profile }, { data: authProfile }] = await Promise.all([
+        client.from("profiles").select("role, full_name, must_change_password").eq("id", data.user.id).maybeSingle(),
+        client.rpc("get_my_profile").maybeSingle(),
+      ]);
 
       if (profile?.must_change_password) {
         router.replace("/account/change-password");
         return;
       }
 
-      if (profile?.role && profile.role !== role && profile.role in dashboardRouteByRole) {
-        router.replace(dashboardRouteByRole[profile.role as Role]);
+      const effectiveRole = (authProfile as { role?: string } | null)?.role ?? profile?.role;
+      if (effectiveRole && effectiveRole !== role && effectiveRole in dashboardRouteByRole) {
+        router.replace(dashboardRouteByRole[effectiveRole as Role]);
         return;
       }
 
@@ -565,6 +565,15 @@ export function RoleDashboard({ role }: { role: Role }) {
     else await refreshTasks();
   };
 
+  const handleDeleteTask = async (taskId: string) => {
+    if (!supabase || role !== "admin") return;
+    if (!window.confirm("¿Eliminar esta tarea? Esta acción no se puede deshacer.")) return;
+    setTaskError("");
+    const { error } = await supabase.rpc("delete_task", { task_id: taskId });
+    if (error) setTaskError(error.message);
+    else await refreshTasks();
+  };
+
   if (isCheckingSession) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#0B0D10] text-sm text-[#9CA3AF]">
@@ -616,7 +625,7 @@ export function RoleDashboard({ role }: { role: Role }) {
           <div className="mt-8 rounded-xl border border-[#252A31] bg-[#0B0D10] p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Acceso</p>
             <p className="mt-2 text-lg font-semibold">{currentRole}</p>
-            <p className="mt-1 text-sm text-[#9CA3AF]">Ruta: {dashboardRouteByRole[role]}</p>
+            <p className="mt-1 text-sm text-[#9CA3AF]">{roleDescriptions[role]}</p>
           </div>
         </aside>
 
@@ -716,6 +725,12 @@ export function RoleDashboard({ role }: { role: Role }) {
                 </ResponsiveContainer>
               </div>
             </div>
+          </section>
+
+          <section className="mb-6 rounded-2xl border border-[#00C878]/20 bg-[#00C878]/5 p-5" aria-labelledby="permissions-heading">
+            <p className="text-xs uppercase tracking-[0.2em] text-[#00C878]">Permisos de tu rol</p>
+            <h3 id="permissions-heading" className="mt-1 text-lg font-semibold">{currentRole}</h3>
+            <p className="mt-2 max-w-3xl text-sm text-[#C5CBD3]">{roleDescriptions[role]}</p>
           </section>
 
           <section className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
@@ -877,9 +892,16 @@ export function RoleDashboard({ role }: { role: Role }) {
                     <span className={`shrink-0 rounded-full px-2 py-1 text-xs ${task.priority === "urgent" ? "bg-red-400/15 text-red-300" : "bg-[#00C878]/10 text-[#00C878]"}`}>{task.priority}</span>
                   </div>
                   <p className="mt-3 text-xs text-[#9CA3AF]">{task.area_name || "Sin área"} · {task.team_name || "Sin equipo"} · {task.assignee_name || "Sin asignar"}{task.due_date ? ` · vence ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString("es-AR")}` : ""}</p>
-                  <select value={task.status} disabled={role === "worker" && task.assignee_id !== currentUserId} onChange={(event) => void handleTaskStatus(task.id, event.target.value)} className="mt-3 rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-xs text-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50">
-                    <option value="pending">Pendiente</option><option value="in_progress">En curso</option><option value="completed">Completada</option><option value="cancelled">Cancelada</option>
-                  </select>
+                  <div className="mt-3 flex items-center gap-2">
+                    <select value={task.status} disabled={role === "worker" && task.assignee_id !== currentUserId} onChange={(event) => void handleTaskStatus(task.id, event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-xs text-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50">
+                      <option value="pending">Pendiente</option><option value="in_progress">En curso</option><option value="completed">Completada</option><option value="cancelled">Cancelada</option>
+                    </select>
+                    {role === "admin" ? (
+                      <button type="button" onClick={() => void handleDeleteTask(task.id)} className="rounded-lg border border-red-400/30 px-3 py-2 text-xs text-red-300 hover:bg-red-400/10">
+                        Eliminar
+                      </button>
+                    ) : null}
+                  </div>
                 </article>
               ))}
               {!tasks.some((task) => taskFilter === "all" || task.status === taskFilter) ? <p className="text-sm text-[#9CA3AF]">No hay tareas disponibles para tu alcance.</p> : null}
