@@ -153,7 +153,7 @@ begin
 
   update public.profiles
   set role = new_role, updated_at = timezone('utc', now())
-  where id = target_user_id;
+  where public.profiles.id = target_user_id;
 
   if not found then
     raise exception 'Profile not found';
@@ -405,7 +405,7 @@ begin
 
   update public.profiles
   set area_id = new_area_id, team_id = new_team_id, updated_at = timezone('utc', now())
-  where id = target_user_id;
+  where public.profiles.id = target_user_id;
 
   if not found then
     raise exception 'Profile not found';
