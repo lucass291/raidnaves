@@ -100,6 +100,13 @@ const workloadData = [
   { name: "Administración", value: 15 },
 ];
 
+const recentPerformance = [
+  { area: "Operación", completed: 48, target: "92%", trend: "+8.4%" },
+  { area: "Atención", completed: 36, target: "88%", trend: "+4.1%" },
+  { area: "Análisis", completed: 29, target: "84%", trend: "+2.7%" },
+  { area: "Administración", completed: 21, target: "79%", trend: "-1.3%" },
+];
+
 const pieColors = ["#00C878", "#2A9D8F", "#9CA3AF", "#252A31"];
 
 const taskPriorityLabels: Record<string, string> = {
@@ -808,29 +815,54 @@ export function RoleDashboard({ role }: { role: Role }) {
             <p className="mt-2 max-w-3xl text-sm text-[#C5CBD3]">{roleDescriptions[role]}</p>
           </section>
 
-          <section id="reportes" className={`${activeSection === "reportes" ? "" : "hidden"} grid gap-4 xl:grid-cols-[1.5fr_1fr]`}>
-            <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
-                {kpis[role].map(({ title, value, change, icon: Icon }) => (
-                  <div key={title} className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-4">
-                    <div className="mb-5 flex items-center justify-between">
-                      <span className="text-sm text-[#9CA3AF]">{title}</span>
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#00C878]/10 text-[#00C878]">
-                        <Icon className="h-4 w-4" />
-                      </div>
+          <section id="reportes" className={`${activeSection === "reportes" ? "" : "hidden"} space-y-4`} aria-labelledby="reports-heading">
+            <div className="rounded-2xl border border-[#00C878]/25 bg-gradient-to-br from-[#00C878]/10 via-[#0B0D10] to-[#0B0D10] p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[#00C878]">Centro de reportes · Datos demo</p>
+                  <h2 id="reports-heading" className="mt-2 text-2xl font-semibold sm:text-3xl">Rendimiento y actividad</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-[#9CA3AF]">
+                    Una vista rápida de los indicadores operativos del período. Estos valores son ilustrativos y no están conectados a tareas reales.
+                  </p>
+                </div>
+                <span className="w-fit rounded-full border border-[#252A31] bg-[#14171C] px-3 py-1.5 text-xs text-[#9CA3AF]">Últimos 7 días</span>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {kpis[role].map(({ title, value, change, icon: Icon }) => (
+                <div key={title} className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-[#9CA3AF]">{title}</p>
+                      <p className="mt-2 text-2xl font-semibold">{value}</p>
                     </div>
-                    <div className="flex items-end justify-between gap-2">
-                      <span className="text-2xl font-semibold">{value}</span>
-                      <span className="text-xs text-[#00C878]">{change}</span>
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#00C878]/10 text-[#00C878]">
+                      <Icon className="h-4 w-4" />
                     </div>
                   </div>
-                ))}
+                  <p className="mt-4 text-xs text-[#00C878]">{change} <span className="text-[#9CA3AF]">vs. período anterior</span></p>
+                </div>
+              ))}
+              <div className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-4 sm:col-span-2 xl:col-span-1">
+                <p className="text-sm text-[#9CA3AF]">Índice de cumplimiento</p>
+                <p className="mt-2 text-2xl font-semibold">87.4%</p>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#252A31]">
+                  <div className="h-full w-[87%] rounded-full bg-[#00C878]" />
+                </div>
+                <p className="mt-2 text-xs text-[#9CA3AF]">Objetivo mensual: 85%</p>
               </div>
+            </div>
 
+            <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+            <div className="space-y-4">
               <div className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-base font-semibold sm:text-lg">Distribución por área</h3>
-                  <span className="text-sm text-[#9CA3AF]">Mes actual</span>
+                  <div>
+                    <h3 className="text-base font-semibold sm:text-lg">Rendimiento diario</h3>
+                    <p className="mt-1 text-xs text-[#9CA3AF]">Tareas completadas · semana demo</p>
+                  </div>
+                  <span className="hidden text-sm text-[#00C878] sm:block">+18.4% semanal</span>
                 </div>
                 <div className="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
                   <div className="h-56 sm:h-72">
@@ -847,12 +879,13 @@ export function RoleDashboard({ role }: { role: Role }) {
                             color: "#F5F5F5",
                           }}
                         />
-                        <Bar dataKey="value" radius={[10, 10, 0, 0]} fill="#00C878" />
+                        <Bar name="Completadas" dataKey="value" radius={[10, 10, 0, 0]} fill="#00C878" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
 
                   <div className="h-64 sm:h-72">
+                    <p className="mb-1 text-sm font-medium">Distribución por área</p>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={workloadData} innerRadius={46} outerRadius={68} dataKey="value" paddingAngle={2}>
@@ -882,6 +915,34 @@ export function RoleDashboard({ role }: { role: Role }) {
                       ))}
                     </div>
                   </div>
+
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold sm:text-lg">Desempeño por área</h3>
+                    <p className="mt-1 text-xs text-[#9CA3AF]">Resumen de actividad reciente</p>
+                  </div>
+                  <span className="text-xs text-[#9CA3AF]">Demo</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[480px] text-left text-sm">
+                    <thead className="border-b border-[#252A31] text-xs uppercase tracking-wide text-[#9CA3AF]">
+                      <tr><th className="pb-3 font-medium">Área</th><th className="pb-3 font-medium">Completadas</th><th className="pb-3 font-medium">Cumplimiento</th><th className="pb-3 text-right font-medium">Tendencia</th></tr>
+                    </thead>
+                    <tbody>
+                      {recentPerformance.map((item) => (
+                        <tr key={item.area} className="border-b border-[#252A31]/70 last:border-0">
+                          <td className="py-3 font-medium">{item.area}</td>
+                          <td className="py-3 text-[#C5CBD3]">{item.completed}</td>
+                          <td className="py-3 text-[#C5CBD3]">{item.target}</td>
+                          <td className={`py-3 text-right ${item.trend.startsWith("-") ? "text-amber-300" : "text-[#00C878]"}`}>{item.trend}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -919,6 +980,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                   ))}
                 </ul>
               </div>
+            </div>
             </div>
           </section>
 
