@@ -611,13 +611,25 @@ export function RoleDashboard({ role }: { role: Role }) {
         trend: formatPercent(areaTotal ? (areaCompleted / areaTotal) * 100 : 0),
       };
     });
-    const teamFeed = visibleTasks.slice(0, 3).map((task) =>
+    const teamFeed = [...visibleTasks]
+      .sort(
+        (first, second) =>
+          new Date(second.updated_at || second.created_at).getTime() -
+          new Date(first.updated_at || first.created_at).getTime(),
+      )
+      .map((task) =>
       `${task.status === "completed" ? "Se completó" : "Se actualizó"} «${task.title}»${task.area_name ? ` · ${task.area_name}` : ""}.`,
-    );
+      );
+    const priorityRank: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
     const priorityItems = visibleTasks
       .filter((task) => task.status !== "completed" && task.status !== "cancelled")
-      .sort((first, second) => (first.due_date ?? "9999-12-31").localeCompare(second.due_date ?? "9999-12-31"))
-      .slice(0, 3)
+      .sort((first, second) => {
+        const priorityDifference = (priorityRank[first.priority] ?? 4) - (priorityRank[second.priority] ?? 4);
+        if (priorityDifference !== 0) return priorityDifference;
+        const dueDateDifference = (first.due_date ?? "9999-12-31").localeCompare(second.due_date ?? "9999-12-31");
+        if (dueDateDifference !== 0) return dueDateDifference;
+        return new Date(second.created_at).getTime() - new Date(first.created_at).getTime();
+      })
       .map((task) => ({ name: task.title, owner: task.assignee_name ?? "Sin asignar", status: taskStatusLabels[task.status] ?? task.status }));
     const summary = {
       admin: { label: "Operaciones visibles", value: String(total), trend: formatPercent(completionRate), detail: `${completed} completadas · ${pending + inProgress} abiertas` },
@@ -873,7 +885,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                   </div>
                   <span className="hidden text-sm text-[#00C878] sm:block">{formatPercent(completionRate)} completadas</span>
                 </div>
-                <div className="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
+                <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
                   <div className="h-56 sm:h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={performanceData}>
@@ -893,7 +905,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="rounded-xl border border-[#252A31] bg-[#14171C] p-3 sm:p-4">
+                  <div className="min-w-0 overflow-hidden rounded-xl border border-[#252A31] bg-[#14171C] p-3 sm:p-4">
                     <p className="text-sm font-medium">Distribución por área</p>
                     <p className="mt-1 text-xs text-[#9CA3AF]">Tareas por sector</p>
                     <div className="h-52">
@@ -915,14 +927,14 @@ export function RoleDashboard({ role }: { role: Role }) {
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#252A31] pt-3">
+                    <div className="mt-2 grid grid-cols-1 gap-2 border-t border-[#252A31] pt-3 sm:grid-cols-2">
                       {workloadData.map((item, index) => (
-                        <div key={item.name} className="flex min-w-0 items-center justify-between gap-2 text-xs">
-                          <span className="flex items-center gap-2 text-[#9CA3AF]">
+                        <div key={item.name} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs">
+                          <span className="flex min-w-0 flex-1 items-center gap-2 text-[#9CA3AF]">
                             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: pieColors[index] }} />
-                            <span className="truncate">{item.name}</span>
+                            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{item.name}</span>
                           </span>
-                          <span>{item.value}%</span>
+                          <span className="shrink-0">{item.value}%</span>
                         </div>
                       ))}
                     </div>
@@ -965,7 +977,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                   <h3 className="text-lg font-semibold">Actividad reciente</h3>
                   <ArrowRight className="h-4 w-4 text-[#9CA3AF]" />
                 </div>
-                <ul className="mt-4 space-y-3">
+                <ul className="dashboard-scrollbar mt-4 max-h-96 space-y-3 overflow-y-auto pr-2">
                   {teamFeed.map((item, index) => (
                     <li key={item} className="flex gap-3 rounded-xl border border-[#252A31] bg-[#14171C] p-3">
                       <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[#00C878]" />
@@ -980,7 +992,7 @@ export function RoleDashboard({ role }: { role: Role }) {
 
               <div className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
                 <h3 className="text-lg font-semibold">Prioridades</h3>
-                <ul className="mt-4 space-y-3">
+                <ul className="mt-4 max-h-96 space-y-3 overflow-y-auto">
                   {priorityItems.map((item) => (
                     <li key={item.name} className="flex items-center justify-between rounded-xl border border-[#252A31] bg-[#14171C] p-3">
                       <div>
