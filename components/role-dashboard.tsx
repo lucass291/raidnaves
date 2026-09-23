@@ -36,75 +36,75 @@ import { supabase } from "@/lib/supabase";
 const overviewByRole: Record<Role, { label: string; value: string; trend: string; detail: string }> = {
   admin: {
     label: "Operaciones globales",
-    value: "184",
-    trend: "+18.4%",
-    detail: "esta semana",
+    value: "0",
+    trend: "0%",
+    detail: "sin datos cargados",
   },
   ceo: {
     label: "Visión del negocio",
-    value: "96.2%",
-    trend: "+9.1%",
-    detail: "eficiencia general",
+    value: "0%",
+    trend: "0%",
+    detail: "sin datos cargados",
   },
   manager: {
     label: "Equipos asignados",
-    value: "12",
-    trend: "+5.7%",
-    detail: "áreas activas",
+    value: "0",
+    trend: "0%",
+    detail: "sin datos cargados",
   },
   worker: {
     label: "Tareas completadas",
-    value: "43",
-    trend: "+11.2%",
-    detail: "hoy",
+    value: "0",
+    trend: "0%",
+    detail: "sin datos cargados",
   },
 };
 
 const kpis: Record<Role, { title: string; value: string; change: string; icon: typeof TrendingUp }[]> = {
   admin: [
-    { title: "Incidencias abiertas", value: "24", change: "+3", icon: BriefcaseBusiness },
-    { title: "Tiempo medio", value: "6.4h", change: "-12%", icon: TrendingUp },
-    { title: "Equipo activo", value: "214", change: "+18", icon: Users },
+    { title: "Incidencias abiertas", value: "0", change: "0", icon: BriefcaseBusiness },
+    { title: "Tiempo medio", value: "0h", change: "0%", icon: TrendingUp },
+    { title: "Equipo activo", value: "0", change: "0", icon: Users },
   ],
   ceo: [
-    { title: "SLA de áreas", value: "94%", change: "+2.8%", icon: ShieldCheck },
-    { title: "Productividad", value: "89%", change: "+6.1%", icon: TrendingUp },
-    { title: "Visión total", value: "7 áreas", change: "+1", icon: LayoutDashboard },
+    { title: "SLA de áreas", value: "0%", change: "0%", icon: ShieldCheck },
+    { title: "Productividad", value: "0%", change: "0%", icon: TrendingUp },
+    { title: "Visión total", value: "0 áreas", change: "0", icon: LayoutDashboard },
   ],
   manager: [
-    { title: "Tareas por equipo", value: "52", change: "+8", icon: BriefcaseBusiness },
-    { title: "Cumplimiento", value: "91%", change: "+4%", icon: CheckCircle2 },
-    { title: "Reuniones", value: "4", change: "-1", icon: CalendarDays },
+    { title: "Tareas por equipo", value: "0", change: "0", icon: BriefcaseBusiness },
+    { title: "Cumplimiento", value: "0%", change: "0%", icon: CheckCircle2 },
+    { title: "Reuniones", value: "0", change: "0", icon: CalendarDays },
   ],
   worker: [
-    { title: "Progreso semanal", value: "76%", change: "+9%", icon: TrendingUp },
-    { title: "Pendientes", value: "12", change: "-3", icon: BriefcaseBusiness },
-    { title: "Colaboración", value: "8", change: "+2", icon: Users },
+    { title: "Progreso semanal", value: "0%", change: "0%", icon: TrendingUp },
+    { title: "Pendientes", value: "0", change: "0", icon: BriefcaseBusiness },
+    { title: "Colaboración", value: "0", change: "0", icon: Users },
   ],
 };
 
 const performanceData = [
-  { day: "L", value: 28 },
-  { day: "M", value: 36 },
-  { day: "X", value: 33 },
-  { day: "J", value: 48 },
-  { day: "V", value: 41 },
-  { day: "S", value: 56 },
-  { day: "D", value: 64 },
+  { day: "L", value: 0 },
+  { day: "M", value: 0 },
+  { day: "X", value: 0 },
+  { day: "J", value: 0 },
+  { day: "V", value: 0 },
+  { day: "S", value: 0 },
+  { day: "D", value: 0 },
 ];
 
 const workloadData = [
-  { name: "Operación", value: 40 },
-  { name: "Atención", value: 25 },
-  { name: "Análisis", value: 20 },
-  { name: "Administración", value: 15 },
+  { name: "Operación", value: 0 },
+  { name: "Atención", value: 0 },
+  { name: "Análisis", value: 0 },
+  { name: "Administración", value: 0 },
 ];
 
 const recentPerformance = [
-  { area: "Operación", completed: 48, target: "92%", trend: "+8.4%" },
-  { area: "Atención", completed: 36, target: "88%", trend: "+4.1%" },
-  { area: "Análisis", completed: 29, target: "84%", trend: "+2.7%" },
-  { area: "Administración", completed: 21, target: "79%", trend: "-1.3%" },
+  { area: "Operación", completed: 0, target: "0%", trend: "0%" },
+  { area: "Atención", completed: 0, target: "0%", trend: "0%" },
+  { area: "Análisis", completed: 0, target: "0%", trend: "0%" },
+  { area: "Administración", completed: 0, target: "0%", trend: "0%" },
 ];
 
 const pieColors = ["#00C878", "#2A9D8F", "#9CA3AF", "#252A31"];
@@ -824,8 +824,11 @@ export function RoleDashboard({ role }: { role: Role }) {
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-[#9CA3AF]">
                     Una vista rápida de los indicadores operativos del período. Estos valores son ilustrativos y no están conectados a tareas reales.
                   </p>
+                  <p className="mt-3 max-w-2xl text-xs leading-5 text-[#6B7280]">
+                    Los valores empiezan en cero. Cuando cargues tareas manuales con área, equipo, estado y fecha, los reportes se podrán calcular sobre esa información.
+                  </p>
                 </div>
-                <span className="w-fit rounded-full border border-[#252A31] bg-[#14171C] px-3 py-1.5 text-xs text-[#9CA3AF]">Últimos 7 días</span>
+                <span className="w-fit rounded-full border border-[#252A31] bg-[#14171C] px-3 py-1.5 text-xs text-[#9CA3AF]">Valores iniciales: 0</span>
               </div>
             </div>
 
@@ -841,16 +844,16 @@ export function RoleDashboard({ role }: { role: Role }) {
                       <Icon className="h-4 w-4" />
                     </div>
                   </div>
-                  <p className="mt-4 text-xs text-[#00C878]">{change} <span className="text-[#9CA3AF]">vs. período anterior</span></p>
+                  <p className="mt-4 text-xs text-[#9CA3AF]">{change} <span>cuando se carguen tareas reales</span></p>
                 </div>
               ))}
               <div className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-4 sm:col-span-2 xl:col-span-1">
                 <p className="text-sm text-[#9CA3AF]">Índice de cumplimiento</p>
-                <p className="mt-2 text-2xl font-semibold">87.4%</p>
+                <p className="mt-2 text-2xl font-semibold">0%</p>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#252A31]">
-                  <div className="h-full w-[87%] rounded-full bg-[#00C878]" />
+                  <div className="h-full w-0 rounded-full bg-[#00C878]" />
                 </div>
-                <p className="mt-2 text-xs text-[#9CA3AF]">Objetivo mensual: 85%</p>
+                <p className="mt-2 text-xs text-[#9CA3AF]">Se calculará al cargar tareas reales</p>
               </div>
             </div>
 
@@ -884,31 +887,34 @@ export function RoleDashboard({ role }: { role: Role }) {
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="h-64 sm:h-72">
-                    <p className="mb-1 text-sm font-medium">Distribución por área</p>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={workloadData} innerRadius={46} outerRadius={68} dataKey="value" paddingAngle={2}>
-                          {workloadData.map((entry, index) => (
-                            <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "#0B0D10",
-                            border: "1px solid #252A31",
-                            borderRadius: "12px",
-                            color: "#F5F5F5",
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="mt-2 space-y-2">
+                  <div className="rounded-xl border border-[#252A31] bg-[#14171C] p-3 sm:p-4">
+                    <p className="text-sm font-medium">Distribución por área</p>
+                    <p className="mt-1 text-xs text-[#9CA3AF]">Tareas por sector</p>
+                    <div className="h-52">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={workloadData} innerRadius={46} outerRadius={68} dataKey="value" paddingAngle={2}>
+                            {workloadData.map((entry, index) => (
+                              <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#0B0D10",
+                              border: "1px solid #252A31",
+                              borderRadius: "12px",
+                              color: "#F5F5F5",
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#252A31] pt-3">
                       {workloadData.map((item, index) => (
-                        <div key={item.name} className="flex items-center justify-between text-sm">
+                        <div key={item.name} className="flex min-w-0 items-center justify-between gap-2 text-xs">
                           <span className="flex items-center gap-2 text-[#9CA3AF]">
                             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: pieColors[index] }} />
-                            {item.name}
+                            <span className="truncate">{item.name}</span>
                           </span>
                           <span>{item.value}%</span>
                         </div>
