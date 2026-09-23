@@ -102,6 +102,20 @@ const workloadData = [
 
 const pieColors = ["#00C878", "#2A9D8F", "#9CA3AF", "#252A31"];
 
+const taskPriorityLabels: Record<string, string> = {
+  low: "Baja",
+  medium: "Media",
+  high: "Alta",
+  urgent: "Urgente",
+};
+
+const taskStatusLabels: Record<string, string> = {
+  pending: "Pendiente",
+  in_progress: "En curso",
+  completed: "Completada",
+  cancelled: "Cancelada",
+};
+
 const teamFeed = [
   "El equipo de operaciones cerró 14 tareas hoy.",
   "Se revisó la asignación de áreas con mayor carga del mes.",
@@ -977,16 +991,69 @@ export function RoleDashboard({ role }: { role: Role }) {
             {taskError ? <p role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">{taskError}</p> : null}
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {visibleTasks.map((task) => (
-                <article key={task.id} className="rounded-xl border border-[#252A31] bg-[#14171C] p-4">
+                <article
+                  key={task.id}
+                  className={`rounded-xl border border-[#252A31] border-l-4 bg-[#14171C] p-4 shadow-lg shadow-black/10 ${
+                    task.priority === "urgent"
+                      ? "border-l-red-400"
+                      : task.priority === "high"
+                        ? "border-l-orange-300"
+                        : task.priority === "medium"
+                          ? "border-l-[#00C878]"
+                          : "border-l-slate-500"
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0"><h4 className="truncate font-medium">{task.title}</h4><p className="mt-1 text-sm text-[#9CA3AF]">{task.description || "Sin descripción"}</p></div>
-                    <span className={`shrink-0 rounded-full px-2 py-1 text-xs ${task.priority === "urgent" ? "bg-red-400/15 text-red-300" : "bg-[#00C878]/10 text-[#00C878]"}`}>{task.priority}</span>
+                    <div className="min-w-0">
+                      <h4 className="truncate font-medium text-[#F5F5F5]">{task.title}</h4>
+                      <p className="mt-1 line-clamp-2 text-sm leading-5 text-[#9CA3AF]">{task.description || "Sin descripción"}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                      task.priority === "urgent"
+                        ? "bg-red-400/15 text-red-300"
+                        : task.priority === "high"
+                          ? "bg-orange-300/15 text-orange-200"
+                          : task.priority === "medium"
+                            ? "bg-[#00C878]/10 text-[#00C878]"
+                            : "bg-slate-400/10 text-slate-300"
+                    }`}>
+                      {taskPriorityLabels[task.priority] ?? task.priority}
+                    </span>
                   </div>
-                  <p className="mt-3 text-xs text-[#9CA3AF]">{task.area_name || "Sin área"} · {task.team_name || "Sin equipo"} · {task.assignee_name || "Sin asignar"}{task.due_date ? ` · vence ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString("es-AR")}` : ""}</p>
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-4 grid gap-2 text-xs text-[#9CA3AF] sm:grid-cols-2">
+                    <div className="rounded-lg bg-[#0B0D10] px-3 py-2">
+                      <span className="block text-[10px] uppercase tracking-[0.12em] text-[#6B7280]">Ubicación</span>
+                      <span className="mt-1 block truncate">{task.area_name || "Sin área"} · {task.team_name || "Sin equipo"}</span>
+                    </div>
+                    <div className="rounded-lg bg-[#0B0D10] px-3 py-2">
+                      <span className="block text-[10px] uppercase tracking-[0.12em] text-[#6B7280]">Responsable</span>
+                      <span className="mt-1 block truncate">{task.assignee_name || "Sin asignar"}</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     <select value={task.status} disabled={role === "worker" && task.assignee_id !== currentUserId} onChange={(event) => void handleTaskStatus(task.id, event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-xs text-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50">
                       <option value="pending">Pendiente</option><option value="in_progress">En curso</option><option value="completed">Completada</option><option value="cancelled">Cancelada</option>
                     </select>
+                    <span className={`rounded-full px-2.5 py-1 text-xs ${
+                      task.status === "completed"
+                        ? "bg-[#00C878]/10 text-[#00C878]"
+                        : task.status === "cancelled"
+                          ? "bg-slate-400/10 text-slate-300"
+                          : task.status === "in_progress"
+                            ? "bg-blue-400/10 text-blue-300"
+                            : "bg-amber-300/10 text-amber-200"
+                    }`}>
+                      {taskStatusLabels[task.status] ?? task.status}
+                    </span>
+                    {task.due_date ? (
+                      <span className={`ml-auto text-xs ${
+                        task.due_date < new Date().toISOString().slice(0, 10) && task.status !== "completed" && task.status !== "cancelled"
+                          ? "text-red-300"
+                          : "text-[#9CA3AF]"
+                      }`}>
+                        Vence {new Date(`${task.due_date}T00:00:00`).toLocaleDateString("es-AR")}
+                      </span>
+                    ) : null}
                     {adminView ? (
                       <button type="button" onClick={() => void handleDeleteTask(task.id)} className="rounded-lg border border-red-400/30 px-3 py-2 text-xs text-red-300 hover:bg-red-400/10">
                         Eliminar
