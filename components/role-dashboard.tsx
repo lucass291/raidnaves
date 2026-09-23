@@ -873,7 +873,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                   </div>
                   <span className="hidden text-sm text-[#00C878] sm:block">{formatPercent(completionRate)} completadas</span>
                 </div>
-                <div className="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
+                <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
                   <div className="h-56 sm:h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={performanceData}>
@@ -893,7 +893,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="rounded-xl border border-[#252A31] bg-[#14171C] p-3 sm:p-4">
+                  <div className="min-w-0 overflow-hidden rounded-xl border border-[#252A31] bg-[#14171C] p-3 sm:p-4">
                     <p className="text-sm font-medium">Distribución por área</p>
                     <p className="mt-1 text-xs text-[#9CA3AF]">Tareas por sector</p>
                     <div className="h-52">
@@ -915,14 +915,14 @@ export function RoleDashboard({ role }: { role: Role }) {
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#252A31] pt-3">
+                    <div className="mt-2 grid grid-cols-1 gap-2 border-t border-[#252A31] pt-3 sm:grid-cols-2">
                       {workloadData.map((item, index) => (
-                        <div key={item.name} className="flex min-w-0 items-center justify-between gap-2 text-xs">
-                          <span className="flex items-center gap-2 text-[#9CA3AF]">
+                        <div key={item.name} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs">
+                          <span className="flex min-w-0 flex-1 items-center gap-2 text-[#9CA3AF]">
                             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: pieColors[index] }} />
-                            <span className="truncate">{item.name}</span>
+                            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{item.name}</span>
                           </span>
-                          <span>{item.value}%</span>
+                          <span className="shrink-0">{item.value}%</span>
                         </div>
                       ))}
                     </div>
