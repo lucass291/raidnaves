@@ -212,9 +212,8 @@ export function RoleDashboard({ role }: { role: Role }) {
   const adminView = role === "admin" || role === "ceo";
   const assignableRoleOptions = role === "ceo" ? roleOptions.filter((option) => option.value !== "admin") : roleOptions;
 
-  const scrollToSection = (sectionId: string) => {
+  const selectSection = (sectionId: string) => {
     setActiveSection(sectionId);
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   useEffect(() => {
@@ -680,7 +679,7 @@ export function RoleDashboard({ role }: { role: Role }) {
               <button
                 key={label}
                 type="button"
-                onClick={() => scrollToSection(id)}
+                onClick={() => selectSection(id)}
                 className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm transition ${
                   activeSection === id
                     ? "border-[#00C878]/40 bg-[#00C878]/10 text-white"
@@ -715,7 +714,7 @@ export function RoleDashboard({ role }: { role: Role }) {
               <button
                 key={label}
                 type="button"
-                onClick={() => scrollToSection(id)}
+                onClick={() => selectSection(id)}
                 className="flex shrink-0 items-center gap-2 rounded-xl border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-xs text-[#9CA3AF] transition hover:border-[#00C878]/40 hover:text-white"
               >
                 <Icon className="h-4 w-4" />
@@ -757,7 +756,7 @@ export function RoleDashboard({ role }: { role: Role }) {
             </div>
           </header>
 
-          <section id="dashboard" className="scroll-mt-4 mb-6 grid gap-4 md:grid-cols-3">
+          <section id="dashboard" className={`${activeSection === "dashboard" ? "" : "hidden"} mb-6 grid gap-4 md:grid-cols-3`}>
             <div className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
               <p className="text-sm text-[#9CA3AF]">{summary.label}</p>
               <div className="mt-4 flex items-end justify-between gap-3">
@@ -803,13 +802,13 @@ export function RoleDashboard({ role }: { role: Role }) {
             </div>
           </section>
 
-          <section className="mb-6 rounded-2xl border border-[#00C878]/20 bg-[#00C878]/5 p-5" aria-labelledby="permissions-heading">
+          <section className={`${activeSection === "dashboard" ? "" : "hidden"} mb-6 rounded-2xl border border-[#00C878]/20 bg-[#00C878]/5 p-5`} aria-labelledby="permissions-heading">
             <p className="text-xs uppercase tracking-[0.2em] text-[#00C878]">Permisos de tu rol</p>
             <h3 id="permissions-heading" className="mt-1 text-lg font-semibold">{currentRole}</h3>
             <p className="mt-2 max-w-3xl text-sm text-[#C5CBD3]">{roleDescriptions[role]}</p>
           </section>
 
-          <section id="reportes" className="scroll-mt-4 grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+          <section id="reportes" className={`${activeSection === "reportes" ? "" : "hidden"} grid gap-4 xl:grid-cols-[1.5fr_1fr]`}>
             <div className="space-y-4">
               <div className="grid gap-4 md:grid-cols-3">
                 {kpis[role].map(({ title, value, change, icon: Icon }) => (
@@ -923,7 +922,7 @@ export function RoleDashboard({ role }: { role: Role }) {
             </div>
           </section>
 
-          <section id="operaciones" className="scroll-mt-4 mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
+          <section id="operaciones" className={`${activeSection === "operaciones" ? "" : "hidden"} mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5`}>
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Operaciones</p>
@@ -1076,7 +1075,7 @@ export function RoleDashboard({ role }: { role: Role }) {
           </section>
 
           {adminView || role === "manager" ? (
-            <section id="equipos" className="scroll-mt-4 mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
+            <section id="equipos" className={`${activeSection === "equipos" ? "" : "hidden"} mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5`}>
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Organización</p>
@@ -1183,7 +1182,7 @@ export function RoleDashboard({ role }: { role: Role }) {
           ) : null}
 
           {adminView || role === "manager" ? (
-            <section id="configuracion" className="scroll-mt-4 mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
+            <section id="configuracion" className={`${activeSection === "configuracion" ? "" : "hidden"} mt-6 rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5`}>
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-[#9CA3AF]">Administración</p>
