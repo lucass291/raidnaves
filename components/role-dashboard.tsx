@@ -33,80 +33,6 @@ import {
 import { dashboardRouteByRole, isValidRole, roleDescriptions, roleLabels, roleOptions, type Role } from "@/lib/rbac";
 import { supabase } from "@/lib/supabase";
 
-const overviewByRole: Record<Role, { label: string; value: string; trend: string; detail: string }> = {
-  admin: {
-    label: "Operaciones globales",
-    value: "0",
-    trend: "0%",
-    detail: "sin datos cargados",
-  },
-  ceo: {
-    label: "Visión del negocio",
-    value: "0%",
-    trend: "0%",
-    detail: "sin datos cargados",
-  },
-  manager: {
-    label: "Equipos asignados",
-    value: "0",
-    trend: "0%",
-    detail: "sin datos cargados",
-  },
-  worker: {
-    label: "Tareas completadas",
-    value: "0",
-    trend: "0%",
-    detail: "sin datos cargados",
-  },
-};
-
-const kpis: Record<Role, { title: string; value: string; change: string; icon: typeof TrendingUp }[]> = {
-  admin: [
-    { title: "Incidencias abiertas", value: "0", change: "0", icon: BriefcaseBusiness },
-    { title: "Tiempo medio", value: "0h", change: "0%", icon: TrendingUp },
-    { title: "Equipo activo", value: "0", change: "0", icon: Users },
-  ],
-  ceo: [
-    { title: "SLA de áreas", value: "0%", change: "0%", icon: ShieldCheck },
-    { title: "Productividad", value: "0%", change: "0%", icon: TrendingUp },
-    { title: "Visión total", value: "0 áreas", change: "0", icon: LayoutDashboard },
-  ],
-  manager: [
-    { title: "Tareas por equipo", value: "0", change: "0", icon: BriefcaseBusiness },
-    { title: "Cumplimiento", value: "0%", change: "0%", icon: CheckCircle2 },
-    { title: "Reuniones", value: "0", change: "0", icon: CalendarDays },
-  ],
-  worker: [
-    { title: "Progreso semanal", value: "0%", change: "0%", icon: TrendingUp },
-    { title: "Pendientes", value: "0", change: "0", icon: BriefcaseBusiness },
-    { title: "Colaboración", value: "0", change: "0", icon: Users },
-  ],
-};
-
-const performanceData = [
-  { day: "L", value: 0 },
-  { day: "M", value: 0 },
-  { day: "X", value: 0 },
-  { day: "J", value: 0 },
-  { day: "V", value: 0 },
-  { day: "S", value: 0 },
-  { day: "D", value: 0 },
-];
-
-const workloadData = [
-  { name: "Operación", value: 0 },
-  { name: "Atención", value: 0 },
-  { name: "Análisis", value: 0 },
-  { name: "Administración", value: 0 },
-];
-
-const recentPerformance = [
-  { area: "Operación", completed: 0, target: "0%", trend: "0%" },
-  { area: "Atención", completed: 0, target: "0%", trend: "0%" },
-  { area: "Análisis", completed: 0, target: "0%", trend: "0%" },
-  { area: "Administración", completed: 0, target: "0%", trend: "0%" },
-];
-
 const pieColors = ["#00C878", "#2A9D8F", "#9CA3AF", "#252A31"];
 
 const taskPriorityLabels: Record<string, string> = {
@@ -123,17 +49,14 @@ const taskStatusLabels: Record<string, string> = {
   cancelled: "Cancelada",
 };
 
-const teamFeed = [
-  "El equipo de operaciones cerró 14 tareas hoy.",
-  "Se revisó la asignación de áreas con mayor carga del mes.",
-  "Se aprobó la planificación de la próxima semana.",
-];
-
-const priorityItems = [
-  { name: "Ajuste de turnos", owner: "J. Gómez", status: "Pendiente" },
-  { name: "Revisión de métricas", owner: "E. Ruiz", status: "En curso" },
-  { name: "Cierre de incidencias", owner: "M. Díaz", status: "Listo" },
-];
+const reportAreaFallback = "Sin área";
+const formatPercent = (value: number) => `${Math.round(value)}%`;
+const dateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 type AdminUser = {
   id: string;
@@ -214,7 +137,6 @@ export function RoleDashboard({ role }: { role: Role }) {
   const [taskAssignees, setTaskAssignees] = useState<TaskOption[]>([]);
   const [activeSection, setActiveSection] = useState("dashboard");
   const currentRole = roleLabels[role];
-  const summary = overviewByRole[role];
   const managerView = role === "manager";
   const adminView = role === "admin" || role === "ceo";
   const assignableRoleOptions = role === "ceo" ? roleOptions.filter((option) => option.value !== "admin") : roleOptions;
@@ -645,6 +567,90 @@ export function RoleDashboard({ role }: { role: Role }) {
       ).length,
     };
   }, [visibleTasks]);
+  const reportData = useMemo(() => {
+    const total = visibleTasks.length;
+    const completed = visibleTasks.filter((task) => task.status === "completed").length;
+    const pending = visibleTasks.filter((task) => task.status === "pending").length;
+    const inProgress = visibleTasks.filter((task) => task.status === "in_progress").length;
+    const completionRate = total ? (completed / total) * 100 : 0;
+    const activeAssignees = new Set(visibleTasks.filter((task) => task.assignee_id).map((task) => task.assignee_id)).size;
+    const areaNames = [...new Set(visibleTasks.map((task) => task.area_name?.trim()).filter(Boolean) as string[])];
+    const areaGroups = areaNames.length ? areaNames : [reportAreaFallback];
+    const completedByArea = new Map<string, number>();
+    const totalByArea = new Map<string, number>();
+    visibleTasks.forEach((task) => {
+      const area = task.area_name?.trim() || reportAreaFallback;
+      totalByArea.set(area, (totalByArea.get(area) ?? 0) + 1);
+      if (task.status === "completed") completedByArea.set(area, (completedByArea.get(area) ?? 0) + 1);
+    });
+
+    const today = new Date();
+    const dayKeys = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - (6 - index));
+      return dateKey(date);
+    });
+    const dayLabels = ["D", "L", "M", "X", "J", "V", "S"];
+    const performanceData = dayKeys.map((key) => ({
+      day: dayLabels[new Date(`${key}T12:00:00`).getDay()],
+      value: visibleTasks.filter(
+        (task) => task.status === "completed" && dateKey(new Date(task.updated_at || task.created_at)) === key,
+      ).length,
+    }));
+    const workloadData = areaGroups.map((name) => ({
+      name,
+      value: total ? Math.round(((totalByArea.get(name) ?? 0) / total) * 100) : 0,
+    }));
+    const recentPerformance = areaGroups.map((area) => {
+      const areaTotal = totalByArea.get(area) ?? 0;
+      const areaCompleted = completedByArea.get(area) ?? 0;
+      return {
+        area,
+        completed: areaCompleted,
+        target: formatPercent(areaTotal ? (areaCompleted / areaTotal) * 100 : 0),
+        trend: formatPercent(areaTotal ? (areaCompleted / areaTotal) * 100 : 0),
+      };
+    });
+    const teamFeed = visibleTasks.slice(0, 3).map((task) =>
+      `${task.status === "completed" ? "Se completó" : "Se actualizó"} «${task.title}»${task.area_name ? ` · ${task.area_name}` : ""}.`,
+    );
+    const priorityItems = visibleTasks
+      .filter((task) => task.status !== "completed" && task.status !== "cancelled")
+      .sort((first, second) => (first.due_date ?? "9999-12-31").localeCompare(second.due_date ?? "9999-12-31"))
+      .slice(0, 3)
+      .map((task) => ({ name: task.title, owner: task.assignee_name ?? "Sin asignar", status: taskStatusLabels[task.status] ?? task.status }));
+    const summary = {
+      admin: { label: "Operaciones visibles", value: String(total), trend: formatPercent(completionRate), detail: `${completed} completadas · ${pending + inProgress} abiertas` },
+      ceo: { label: "Visión del negocio", value: formatPercent(completionRate), trend: String(total), detail: `${areaNames.length} áreas con tareas · ${completed} completadas` },
+      manager: { label: "Equipos asignados", value: String(total), trend: formatPercent(completionRate), detail: `${completed} completadas · ${activeAssignees} colaboradores` },
+      worker: { label: "Tareas completadas", value: String(completed), trend: formatPercent(completionRate), detail: `${pending} pendientes · ${inProgress} en curso` },
+    }[role];
+    const kpisByRole: Record<Role, { title: string; value: string; change: string; icon: typeof TrendingUp }[]> = {
+      admin: [
+        { title: "Incidencias abiertas", value: String(pending + inProgress), change: formatPercent(completionRate), icon: BriefcaseBusiness },
+        { title: "Tiempo medio", value: "0h", change: "Sin datos", icon: TrendingUp },
+        { title: "Equipo activo", value: String(activeAssignees), change: String(total), icon: Users },
+      ],
+      ceo: [
+        { title: "SLA de áreas", value: formatPercent(completionRate), change: String(completed), icon: ShieldCheck },
+        { title: "Productividad", value: formatPercent(completionRate), change: String(total), icon: TrendingUp },
+        { title: "Visión total", value: `${areaNames.length} áreas`, change: String(total), icon: LayoutDashboard },
+      ],
+      manager: [
+        { title: "Tareas por equipo", value: String(total), change: String(activeAssignees), icon: BriefcaseBusiness },
+        { title: "Cumplimiento", value: formatPercent(completionRate), change: String(completed), icon: CheckCircle2 },
+        { title: "Reuniones", value: "0", change: "Sin datos", icon: CalendarDays },
+      ],
+      worker: [
+        { title: "Progreso semanal", value: formatPercent(completionRate), change: String(completed), icon: TrendingUp },
+        { title: "Pendientes", value: String(pending), change: String(inProgress), icon: BriefcaseBusiness },
+        { title: "Colaboración", value: String(activeAssignees), change: String(total), icon: Users },
+      ],
+    };
+    const kpis = kpisByRole[role];
+    return { summary, kpis, performanceData, workloadData, recentPerformance, completionRate, completed, total, teamFeed, priorityItems };
+  }, [role, visibleTasks]);
+  const { summary, kpis, performanceData, workloadData, recentPerformance, completionRate, teamFeed, priorityItems } = reportData;
   const clearTaskFilters = () => {
     setTaskFilter("all");
     setTaskAreaFilter("");
@@ -819,21 +825,21 @@ export function RoleDashboard({ role }: { role: Role }) {
             <div className="rounded-2xl border border-[#00C878]/25 bg-gradient-to-br from-[#00C878]/10 via-[#0B0D10] to-[#0B0D10] p-5 sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[#00C878]">Centro de reportes · Datos demo</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[#00C878]">Centro de reportes · Datos en vivo</p>
                   <h2 id="reports-heading" className="mt-2 text-2xl font-semibold sm:text-3xl">Rendimiento y actividad</h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-[#9CA3AF]">
-                    Una vista rápida de los indicadores operativos del período. Estos valores son ilustrativos y no están conectados a tareas reales.
+                    Una vista rápida de los indicadores operativos calculados a partir de las tareas visibles.
                   </p>
                   <p className="mt-3 max-w-2xl text-xs leading-5 text-[#6B7280]">
-                    Los valores empiezan en cero. Cuando cargues tareas manuales con área, equipo, estado y fecha, los reportes se podrán calcular sobre esa información.
+                    Los indicadores se actualizan al crear tareas o cambiar su estado y respetan los filtros de tareas seleccionados.
                   </p>
                 </div>
-                <span className="w-fit rounded-full border border-[#252A31] bg-[#14171C] px-3 py-1.5 text-xs text-[#9CA3AF]">Valores iniciales: 0</span>
+                <span className="w-fit rounded-full border border-[#252A31] bg-[#14171C] px-3 py-1.5 text-xs text-[#9CA3AF]">Tareas visibles: {reportData.total}</span>
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {kpis[role].map(({ title, value, change, icon: Icon }) => (
+              {kpis.map(({ title, value, change, icon: Icon }) => (
                 <div key={title} className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -844,16 +850,16 @@ export function RoleDashboard({ role }: { role: Role }) {
                       <Icon className="h-4 w-4" />
                     </div>
                   </div>
-                  <p className="mt-4 text-xs text-[#9CA3AF]">{change} <span>cuando se carguen tareas reales</span></p>
+                  <p className="mt-4 text-xs text-[#9CA3AF]">{change} <span>según tareas visibles</span></p>
                 </div>
               ))}
               <div className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-4 sm:col-span-2 xl:col-span-1">
                 <p className="text-sm text-[#9CA3AF]">Índice de cumplimiento</p>
-                <p className="mt-2 text-2xl font-semibold">0%</p>
+                <p className="mt-2 text-2xl font-semibold">{formatPercent(completionRate)}</p>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#252A31]">
-                  <div className="h-full w-0 rounded-full bg-[#00C878]" />
+                  <div className="h-full rounded-full bg-[#00C878]" style={{ width: `${completionRate}%` }} />
                 </div>
-                <p className="mt-2 text-xs text-[#9CA3AF]">Se calculará al cargar tareas reales</p>
+                <p className="mt-2 text-xs text-[#9CA3AF]">Completadas sobre tareas visibles</p>
               </div>
             </div>
 
@@ -863,9 +869,9 @@ export function RoleDashboard({ role }: { role: Role }) {
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h3 className="text-base font-semibold sm:text-lg">Rendimiento diario</h3>
-                    <p className="mt-1 text-xs text-[#9CA3AF]">Tareas completadas · semana demo</p>
+                    <p className="mt-1 text-xs text-[#9CA3AF]">Tareas completadas · últimos 7 días</p>
                   </div>
-                  <span className="hidden text-sm text-[#00C878] sm:block">+18.4% semanal</span>
+                  <span className="hidden text-sm text-[#00C878] sm:block">{formatPercent(completionRate)} completadas</span>
                 </div>
                 <div className="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
                   <div className="h-56 sm:h-72">
@@ -931,7 +937,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                     <h3 className="text-base font-semibold sm:text-lg">Desempeño por área</h3>
                     <p className="mt-1 text-xs text-[#9CA3AF]">Resumen de actividad reciente</p>
                   </div>
-                  <span className="text-xs text-[#9CA3AF]">Demo</span>
+                  <span className="text-xs text-[#9CA3AF]">Datos en vivo</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[480px] text-left text-sm">
