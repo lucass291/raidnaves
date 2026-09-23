@@ -977,7 +977,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                   <h3 className="text-lg font-semibold">Actividad reciente</h3>
                   <ArrowRight className="h-4 w-4 text-[#9CA3AF]" />
                 </div>
-                <ul className="mt-4 max-h-96 space-y-3 overflow-y-auto">
+                <ul className="dashboard-scrollbar mt-4 max-h-96 space-y-3 overflow-y-auto pr-2">
                   {teamFeed.map((item, index) => (
                     <li key={item} className="flex gap-3 rounded-xl border border-[#252A31] bg-[#14171C] p-3">
                       <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[#00C878]" />
