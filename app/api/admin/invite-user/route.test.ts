@@ -29,7 +29,7 @@ function requestToDeleteUser(userId = "target-1") {
   });
 }
 
-function requestToInviteUser() {
+function requestToInviteUser(teamId?: string) {
   return new Request("http://localhost/api/admin/invite-user", {
     method: "POST",
     headers: {
@@ -41,6 +41,7 @@ function requestToInviteUser() {
       fullName: "Trabajador",
       role: "worker",
       temporaryPassword: "temporary-password",
+      teamId,
     }),
   });
 }
@@ -92,7 +93,10 @@ function configureClients({
   return { deleteUser, requester, target };
 }
 
-function configureInvitationClients(cleanupError: { message: string } | null) {
+function configureInvitationClients(
+  cleanupError: { message: string } | null,
+  teamQueryError: { message: string } | null = null,
+) {
   const getUser = vi.fn().mockResolvedValue({
     data: { user: { id: "requester-1" } },
     error: null,
@@ -107,7 +111,10 @@ function configureInvitationClients(cleanupError: { message: string } | null) {
   });
   const deleteUser = vi.fn().mockResolvedValue({ error: cleanupError });
   const upsert = vi.fn().mockResolvedValue({ error: { message: "profile save failed" } });
-  const adminFrom = vi.fn(() => ({ upsert }));
+  const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: teamQueryError });
+  const eq = vi.fn(() => ({ maybeSingle }));
+  const select = vi.fn(() => ({ eq }));
+  const adminFrom = vi.fn((table: string) => (table === "profiles" ? { upsert } : { select }));
 
   createClientMock
     .mockReturnValueOnce({ auth: { getUser } })
@@ -117,7 +124,7 @@ function configureInvitationClients(cleanupError: { message: string } | null) {
     })
     .mockReturnValueOnce({ from: requester.from });
 
-  return { createUser, deleteUser, upsert };
+  return { createUser, deleteUser, maybeSingle, upsert };
 }
 
 describe("DELETE /api/admin/invite-user", () => {
@@ -236,6 +243,19 @@ describe("POST /api/admin/invite-user", () => {
     await expect(response.json()).resolves.toEqual({
       error: "El cuerpo de la solicitud no es válido.",
     });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it("reports a server error when the selected team's area cannot be verified", async () => {
+    const { createUser, maybeSingle } = configureInvitationClients(null, { message: "team query failed" });
+
+    const response = await POST(requestToInviteUser("team-1"));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "No se pudo verificar el equipo: team query failed",
+    });
+    expect(maybeSingle).toHaveBeenCalledOnce();
     expect(createUser).not.toHaveBeenCalled();
   });
 });
