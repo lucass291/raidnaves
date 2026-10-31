@@ -94,7 +94,15 @@ export async function POST(request: Request) {
   const { role: authorizedRole, areaId } = invitationPolicy;
 
   if (teamId) {
-    const { data: team } = await adminClient.from("teams").select("area_id").eq("id", teamId).maybeSingle();
+    const { data: team, error: teamError } = await adminClient
+      .from("teams")
+      .select("area_id")
+      .eq("id", teamId)
+      .maybeSingle();
+    if (teamError) {
+      return NextResponse.json({ error: `No se pudo verificar el equipo: ${teamError.message}` }, { status: 500 });
+    }
+
     if (!team || team.area_id !== areaId) {
       return NextResponse.json({ error: "El equipo seleccionado no pertenece al área asignada." }, { status: 400 });
     }
