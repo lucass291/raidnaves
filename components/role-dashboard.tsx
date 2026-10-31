@@ -51,6 +51,26 @@ const taskStatusLabels: Record<string, string> = {
 
 const reportAreaFallback = "Sin área";
 const formatPercent = (value: number) => `${Math.round(value)}%`;
+const formatRelativeTime = (timestamp: string) => {
+  const date = new Date(timestamp);
+  if (!timestamp || Number.isNaN(date.getTime())) return "Fecha no disponible";
+
+  const elapsedSeconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const units: { unit: Intl.RelativeTimeFormatUnit; seconds: number }[] = [
+    { unit: "year", seconds: 31_536_000 },
+    { unit: "month", seconds: 2_592_000 },
+    { unit: "week", seconds: 604_800 },
+    { unit: "day", seconds: 86_400 },
+    { unit: "hour", seconds: 3_600 },
+    { unit: "minute", seconds: 60 },
+    { unit: "second", seconds: 1 },
+  ];
+  const selectedUnit = units.find(({ seconds }) => Math.abs(elapsedSeconds) >= seconds) ?? units[units.length - 1];
+  return new Intl.RelativeTimeFormat("es", { numeric: "auto" }).format(
+    Math.round(elapsedSeconds / selectedUnit.seconds),
+    selectedUnit.unit,
+  );
+};
 const dateKey = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -473,7 +493,7 @@ export function RoleDashboard({ role }: { role: Role }) {
     if (!supabase) return;
     setStructureError("");
     const { error } = await supabase.rpc("update_area_manager", {
-      area_id: areaId,
+      target_area_id: areaId,
       target_user_id: userId || null,
     });
     if (error) {
@@ -494,7 +514,7 @@ export function RoleDashboard({ role }: { role: Role }) {
     if (!supabase) return;
     setStructureError("");
     const { error } = await supabase.rpc("update_team_responsible", {
-      team_id: teamId,
+      target_team_id: teamId,
       target_user_id: userId || null,
     });
     if (error) {
@@ -632,9 +652,11 @@ export function RoleDashboard({ role }: { role: Role }) {
           new Date(second.updated_at || second.created_at).getTime() -
           new Date(first.updated_at || first.created_at).getTime(),
       )
-      .map((task) =>
-      `${task.status === "completed" ? "Se completó" : "Se actualizó"} «${task.title}»${task.area_name ? ` · ${task.area_name}` : ""}.`,
-      );
+      .map((task) => ({
+        id: task.id,
+        description: `${task.status === "completed" ? "Se completó" : "Se actualizó"} «${task.title}»${task.area_name ? ` · ${task.area_name}` : ""}.`,
+        timestamp: task.updated_at || task.created_at,
+      }));
     const priorityRank: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
     const priorityItems = visibleTasks
       .filter((task) => task.status !== "completed" && task.status !== "cancelled")
@@ -678,6 +700,7 @@ export function RoleDashboard({ role }: { role: Role }) {
     return { summary, kpis, performanceData, workloadData, recentPerformance, completionRate, completed, total, teamFeed, priorityItems };
   }, [role, visibleTasks]);
   const { summary, kpis, performanceData, workloadData, recentPerformance, completionRate, teamFeed, priorityItems } = reportData;
+  const canAccessManagementSections = role === "admin" || role === "ceo" || role === "manager";
   const clearTaskFilters = () => {
     setTaskFilter("all");
     setTaskAreaFilter("");
@@ -715,7 +738,7 @@ export function RoleDashboard({ role }: { role: Role }) {
               { id: "equipos", label: "Equipos", icon: Users },
               { id: "reportes", label: "Reporte", icon: TrendingUp },
               { id: "configuracion", label: "Configuración", icon: Settings },
-            ].map(({ id, label, icon: Icon }) => (
+            ].filter(({ id }) => canAccessManagementSections || (id !== "equipos" && id !== "configuracion")).map(({ id, label, icon: Icon }) => (
               <button
                 key={label}
                 type="button"
@@ -750,7 +773,7 @@ export function RoleDashboard({ role }: { role: Role }) {
               { id: "equipos", label: "Equipos", icon: Users },
               { id: "reportes", label: "Reportes", icon: TrendingUp },
               { id: "configuracion", label: "Configuración", icon: Settings },
-            ].map(({ id, label, icon: Icon }) => (
+            ].filter(({ id }) => canAccessManagementSections || (id !== "equipos" && id !== "configuracion")).map(({ id, label, icon: Icon }) => (
               <button
                 key={label}
                 type="button"
@@ -993,12 +1016,12 @@ export function RoleDashboard({ role }: { role: Role }) {
                   <ArrowRight className="h-4 w-4 text-[#9CA3AF]" />
                 </div>
                 <ul className="dashboard-scrollbar mt-4 max-h-96 space-y-3 overflow-y-auto pr-2">
-                  {teamFeed.map((item, index) => (
-                    <li key={item} className="flex gap-3 rounded-xl border border-[#252A31] bg-[#14171C] p-3">
+                  {teamFeed.map((item) => (
+                    <li key={item.id} className="flex gap-3 rounded-xl border border-[#252A31] bg-[#14171C] p-3">
                       <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[#00C878]" />
                       <p className="text-sm text-[#F5F5F5]">
-                        {item}
-                        <span className="mt-1 block text-xs text-[#9CA3AF]">Hace {index + 1}h</span>
+                        {item.description}
+                        <span className="mt-1 block text-xs text-[#9CA3AF]">{formatRelativeTime(item.timestamp)}</span>
                       </p>
                     </li>
                   ))}
