@@ -1113,8 +1113,9 @@ export function RoleDashboard({ role }: { role: Role }) {
                 <select value={taskTeamId} onChange={(event) => {
                   const selection = taskAssignmentAfterTeamChange(
                     { areaId: taskAreaId, teamId: taskTeamId, assigneeId: taskAssigneeId },
-                    event.target.value,
+                    taskTeams.find((team) => team.id === event.target.value) ?? null,
                   );
+                  setTaskAreaId(selection.areaId);
                   setTaskTeamId(selection.teamId);
                   setTaskAssigneeId(selection.assigneeId);
                 }} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
