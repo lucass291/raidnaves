@@ -78,6 +78,7 @@ type Area = {
   manager_name: string | null;
   manager_role: string | null;
 };
+type TeamMember = { id: string; full_name: string | null };
 type Team = {
   id: string;
   area_id: string;
@@ -86,6 +87,7 @@ type Team = {
   responsible_id: string | null;
   responsible_name: string | null;
   responsible_role: string | null;
+  members?: TeamMember[];
 };
 type Task = {
   id: string; title: string; description: string | null; status: string; priority: string;
@@ -99,6 +101,7 @@ export function RoleDashboard({ role }: { role: Role }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
+  const [currentUserTeamId, setCurrentUserTeamId] = useState("");
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersError, setUsersError] = useState("");
@@ -163,7 +166,7 @@ export function RoleDashboard({ role }: { role: Role }) {
       }
 
       const [{ data: profile }, { data: authProfile }] = await Promise.all([
-        client.from("profiles").select("role, full_name, area_id, must_change_password").eq("id", data.user.id).maybeSingle(),
+        client.from("profiles").select("role, full_name, area_id, team_id, must_change_password").eq("id", data.user.id).maybeSingle(),
         client.rpc("get_my_profile").maybeSingle(),
       ]);
 
@@ -209,8 +212,19 @@ export function RoleDashboard({ role }: { role: Role }) {
             setTeamAreaId((structure?.areas?.[0]?.id as string | undefined) ?? "");
           }
         } else {
-          const managerAreaId = (profile as { area_id?: string | null } | null)?.area_id;
-          setManagerAreaId(managerAreaId ?? "");
+          const managerProfile = profile as { area_id?: string | null; team_id?: string | null } | null;
+          const areaId = managerProfile?.area_id ?? "";
+          setManagerAreaId(areaId);
+          setCurrentUserTeamId(managerProfile?.team_id ?? "");
+          const { data: structure, error: structureQueryError } = await client.rpc("list_manager_structure");
+          if (structureQueryError) {
+            setStructureError(structureQueryError.message);
+          } else {
+            const managerAreas = (structure?.areas ?? []) as Area[];
+            setAreas(managerAreas);
+            setTeams((structure?.teams ?? []) as Team[]);
+            setTeamAreaId(areaId);
+          }
         }
       }
 
@@ -400,7 +414,7 @@ export function RoleDashboard({ role }: { role: Role }) {
 
   const refreshStructure = async () => {
     if (!supabase) return;
-    const { data, error } = await supabase.rpc("list_admin_structure");
+    const { data, error } = await supabase.rpc(managerView ? "list_manager_structure" : "list_admin_structure");
     if (error) {
       setStructureError(error.message);
       return;
@@ -429,10 +443,11 @@ export function RoleDashboard({ role }: { role: Role }) {
 
   const handleCreateTeam = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!supabase || !teamAreaId || !teamName.trim()) return;
+    const areaId = managerView ? managerAreaId : teamAreaId;
+    if (!supabase || !areaId || !teamName.trim()) return;
     setStructureError("");
     const { error } = await supabase.rpc("create_team", {
-      team_area_id: teamAreaId,
+      team_area_id: areaId,
       team_name: teamName,
       team_description: null,
     });
@@ -1171,28 +1186,36 @@ export function RoleDashboard({ role }: { role: Role }) {
               </div>
 
               <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                <form onSubmit={handleCreateArea} className="flex gap-2">
-                  <input
-                    required
-                    value={areaName}
-                    onChange={(event) => setAreaName(event.target.value)}
-                    className="min-w-0 flex-1 rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
-                    placeholder="Nueva área"
-                  />
-                  <button type="submit" className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10]">
-                    Crear área
-                  </button>
-                </form>
-                <form onSubmit={handleCreateTeam} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                  <select
-                    required
-                    value={teamAreaId}
-                    onChange={(event) => setTeamAreaId(event.target.value)}
-                    className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
-                  >
-                    <option value="" disabled>Elegí un área</option>
-                    {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
-                  </select>
+                {adminView ? (
+                  <form onSubmit={handleCreateArea} className="flex gap-2">
+                    <input
+                      required
+                      value={areaName}
+                      onChange={(event) => setAreaName(event.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                      placeholder="Nueva área"
+                    />
+                    <button type="submit" className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10]">
+                      Crear área
+                    </button>
+                  </form>
+                ) : null}
+                <form onSubmit={handleCreateTeam} className={`grid gap-2 ${adminView ? "sm:grid-cols-[1fr_1fr_auto]" : "sm:grid-cols-[1fr_auto]"}`}>
+                  {adminView ? (
+                    <select
+                      required
+                      value={teamAreaId}
+                      onChange={(event) => setTeamAreaId(event.target.value)}
+                      className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                    >
+                      <option value="" disabled>Elegí un área</option>
+                      {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+                    </select>
+                  ) : (
+                    <p className="flex items-center rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#9CA3AF]">
+                      Área: {areas[0]?.name ?? "Tu área"}
+                    </p>
+                  )}
                   <input
                     required
                     value={teamName}
@@ -1212,6 +1235,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                 </p>
               ) : null}
 
+              {adminView ? (
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 {areas.map((area) => (
                   <div key={area.id} className="rounded-xl border border-[#252A31] bg-[#14171C] p-4">
@@ -1264,6 +1288,55 @@ export function RoleDashboard({ role }: { role: Role }) {
                   </div>
                 ))}
               </div>
+              ) : (
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {teams.map((team) => (
+                    <article
+                      key={team.id}
+                      className={`rounded-xl border bg-[#14171C] p-4 ${
+                        team.id === currentUserTeamId ? "border-[#00C878]/50" : "border-[#252A31]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">{team.name}</p>
+                          <p className="mt-1 text-xs text-[#9CA3AF]">{areas[0]?.name ?? "Tu área"}</p>
+                        </div>
+                        {team.id === currentUserTeamId ? (
+                          <span className="shrink-0 rounded-full bg-[#00C878]/10 px-2.5 py-1 text-xs text-[#00C878]">
+                            Tu equipo
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-4 rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2">
+                        <p className="text-xs text-[#9CA3AF]">Jefe de área</p>
+                        <p className="mt-1 text-sm text-[#F5F5F5]">{areas[0]?.manager_name ?? "Sin asignar"}</p>
+                      </div>
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs uppercase tracking-wide text-[#9CA3AF]">Trabajadores</p>
+                          <span className="text-xs text-[#9CA3AF]">{team.members?.length ?? 0}</span>
+                        </div>
+                        {team.members?.length ? (
+                          <ul className="mt-2 space-y-2">
+                            {team.members.map((member) => (
+                              <li key={member.id} className="flex items-center gap-2 text-sm text-[#C5CBD3]">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#00C878]" />
+                                {member.full_name || "Sin nombre"}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-2 text-sm text-[#6B7280]">Todavía no hay trabajadores asignados.</p>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                  {teams.length === 0 ? (
+                    <p className="text-sm text-[#9CA3AF]">Todavía no hay equipos en tu área. Creá el primero desde este apartado.</p>
+                  ) : null}
+                </div>
+              )}
             </section>
           ) : null}
 
