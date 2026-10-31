@@ -12,9 +12,13 @@ export function taskAssignmentAfterAreaChange(areaId: string): TaskAssignmentSel
 
 export function taskAssignmentAfterTeamChange(
   selection: TaskAssignmentSelection,
-  teamId: string,
+  team: Pick<TaskOption, "id" | "area_id"> | null,
 ): TaskAssignmentSelection {
-  return { ...selection, teamId, assigneeId: "" };
+  return {
+    areaId: team?.area_id ?? selection.areaId,
+    teamId: team?.id ?? "",
+    assigneeId: "",
+  };
 }
 
 export function filterTaskAssignees(

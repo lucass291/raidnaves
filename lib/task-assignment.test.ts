@@ -25,9 +25,27 @@ describe("task assignment selection", () => {
     expect(
       taskAssignmentAfterTeamChange(
         { areaId: "area-a", teamId: "team-a", assigneeId: "worker-a" },
-        "team-b",
+        { id: "team-b", area_id: "area-a" },
       ),
     ).toEqual({ areaId: "area-a", teamId: "team-b", assigneeId: "" });
+  });
+
+  it("selects the team's area when a team is chosen before an area", () => {
+    expect(
+      taskAssignmentAfterTeamChange(
+        { areaId: "", teamId: "", assigneeId: "" },
+        { id: "team-c", area_id: "area-b" },
+      ),
+    ).toEqual({ areaId: "area-b", teamId: "team-c", assigneeId: "" });
+  });
+
+  it("clears the team but keeps the selected area when no team is selected", () => {
+    expect(
+      taskAssignmentAfterTeamChange(
+        { areaId: "area-a", teamId: "team-a", assigneeId: "worker-a" },
+        null,
+      ),
+    ).toEqual({ areaId: "area-a", teamId: "", assigneeId: "" });
   });
 
   it("filters assignees by both selected area and team", () => {
