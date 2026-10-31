@@ -31,6 +31,12 @@ import {
   YAxis,
 } from "recharts";
 import { dashboardRouteByRole, isValidRole, roleDescriptions, roleLabels, roleOptions, type Role } from "@/lib/rbac";
+import {
+  filterTaskAssignees,
+  taskAssignmentAfterAreaChange,
+  taskAssignmentAfterTeamChange,
+  type TaskOption,
+} from "@/lib/task-assignment";
 import { supabase } from "@/lib/supabase";
 
 const pieColors = ["#00C878", "#2A9D8F", "#9CA3AF", "#252A31"];
@@ -115,8 +121,6 @@ type Task = {
   assignee_id: string | null; assignee_name: string | null; created_by: string; creator_name: string | null;
   due_date: string | null; created_at: string; updated_at: string;
 };
-type TaskOption = { id: string; name: string; area_id?: string; team_id?: string };
-
 export function RoleDashboard({ role }: { role: Role }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -1106,14 +1110,26 @@ export function RoleDashboard({ role }: { role: Role }) {
                 <select value={taskPriority} onChange={(event) => setTaskPriority(event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
                   <option value="low">Prioridad baja</option><option value="medium">Prioridad media</option><option value="high">Prioridad alta</option><option value="urgent">Urgente</option>
                 </select>
-                <select value={taskAreaId} onChange={(event) => { setTaskAreaId(event.target.value); setTaskTeamId(""); setTaskAssigneeId(""); }} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
+                <select value={taskAreaId} onChange={(event) => {
+                  const selection = taskAssignmentAfterAreaChange(event.target.value);
+                  setTaskAreaId(selection.areaId);
+                  setTaskTeamId(selection.teamId);
+                  setTaskAssigneeId(selection.assigneeId);
+                }} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
                   <option value="">Sin área</option>{taskAreas.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
-                <select value={taskTeamId} onChange={(event) => { setTaskTeamId(event.target.value); setTaskAssigneeId(""); }} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
+                <select value={taskTeamId} onChange={(event) => {
+                  const selection = taskAssignmentAfterTeamChange(
+                    { areaId: taskAreaId, teamId: taskTeamId, assigneeId: taskAssigneeId },
+                    event.target.value,
+                  );
+                  setTaskTeamId(selection.teamId);
+                  setTaskAssigneeId(selection.assigneeId);
+                }} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
                   <option value="">Sin equipo</option>{taskTeams.filter((item) => !taskAreaId || item.area_id === taskAreaId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
                 <select value={taskAssigneeId} onChange={(event) => setTaskAssigneeId(event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm">
-                  <option value="">Sin asignar</option>{taskAssignees.filter((item) => (!taskAreaId || item.area_id === taskAreaId) && (!taskTeamId || item.team_id === taskTeamId)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  <option value="">Sin asignar</option>{filterTaskAssignees(taskAssignees, taskAreaId, taskTeamId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
                 <input type="date" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} className="rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2 text-sm" />
                 <button type="submit" className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10]">Crear tarea</button>
