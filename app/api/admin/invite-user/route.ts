@@ -6,6 +6,17 @@ import { resolveInvitationPolicy } from "@/lib/user-invitation-policy";
 
 export const dynamic = "force-dynamic";
 
+async function parseRequestBody(request: Request): Promise<Record<string, unknown> | null> {
+  try {
+    const body: unknown = await request.json();
+    return body !== null && typeof body === "object" && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -47,25 +58,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Solo un administrador, CEO o jefe de área puede invitar usuarios." }, { status: 403 });
   }
 
-  const body = (await request.json()) as {
-    email?: string;
-    fullName?: string;
-    role?: string;
-    temporaryPassword?: string;
-    areaId?: string;
-    teamId?: string;
-  };
-  const email = body.email?.trim().toLowerCase();
-  const fullName = body.fullName?.trim() ?? "";
-  const role = requester.role === "manager" ? "worker" : body.role;
-  const temporaryPassword = body.temporaryPassword;
+  const body = await parseRequestBody(request);
+  if (!body) {
+    return NextResponse.json({ error: "El cuerpo de la solicitud no es válido." }, { status: 400 });
+  }
+
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+  const requestedRole = typeof body.role === "string" ? body.role : "";
+  const role = requester.role === "manager" ? "worker" : requestedRole;
+  const temporaryPassword = typeof body.temporaryPassword === "string" ? body.temporaryPassword : "";
 
   if (!email || !email.includes("@") || !role || !isValidRole(role) || !temporaryPassword || temporaryPassword.length < 8) {
     return NextResponse.json({ error: "Completá un email, un rol y una contraseña provisoria de al menos 8 caracteres." }, { status: 400 });
   }
 
-  const requestedAreaId = body.areaId?.trim() || null;
-  const teamId = body.teamId?.trim() || null;
+  if (
+    (body.areaId !== undefined && body.areaId !== null && typeof body.areaId !== "string") ||
+    (body.teamId !== undefined && body.teamId !== null && typeof body.teamId !== "string")
+  ) {
+    return NextResponse.json({ error: "El área o equipo seleccionado no es válido." }, { status: 400 });
+  }
+
+  const requestedAreaId = typeof body.areaId === "string" ? body.areaId.trim() || null : null;
+  const teamId = typeof body.teamId === "string" ? body.teamId.trim() || null : null;
   const invitationPolicy = resolveInvitationPolicy({
     requesterRole: requester.role as Role,
     requestedRole: role,
@@ -158,8 +174,12 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Solo un administrador o CEO puede eliminar usuarios." }, { status: 403 });
   }
 
-  const body = (await request.json()) as { userId?: string };
-  const userId = body.userId?.trim();
+  const body = await parseRequestBody(request);
+  if (!body) {
+    return NextResponse.json({ error: "El cuerpo de la solicitud no es válido." }, { status: 400 });
+  }
+
+  const userId = typeof body.userId === "string" ? body.userId.trim() : "";
 
   if (!userId) {
     return NextResponse.json({ error: "Debés indicar el usuario que querés eliminar." }, { status: 400 });
