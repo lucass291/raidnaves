@@ -203,7 +203,7 @@ export default function LoginPage() {
                 <ShieldCheck className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-[#9CA3AF]">Internal platform</p>
+                <p className="text-xs uppercase tracking-[0.3em] text-[#9CA3AF]">Plataforma interna</p>
                 <h1 className="text-2xl font-semibold">Raidnaves</h1>
               </div>
             </div>
@@ -225,13 +225,13 @@ export default function LoginPage() {
 
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
-                  { label: "Áreas", value: "7" },
-                  { label: "Equipos", value: "24" },
-                  { label: "KPI", value: "96%" },
-                ].map((stat) => (
-                  <div key={stat.label} className="rounded-2xl border border-[#252A31] bg-[#0B0D10]/80 p-4">
-                    <p className="text-2xl font-semibold text-[#F5F5F5]">{stat.value}</p>
-                    <p className="mt-1 text-sm text-[#9CA3AF]">{stat.label}</p>
+                  { title: "Áreas", description: "Organización por sector" },
+                  { title: "Equipos", description: "Trabajo coordinado" },
+                  { title: "Reportes", description: "Indicadores operativos" },
+                ].map((capability) => (
+                  <div key={capability.title} className="rounded-2xl border border-[#252A31] bg-[#0B0D10]/80 p-4">
+                    <p className="text-lg font-semibold text-[#F5F5F5]">{capability.title}</p>
+                    <p className="mt-1 text-sm text-[#9CA3AF]">{capability.description}</p>
                   </div>
                 ))}
               </div>
