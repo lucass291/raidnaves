@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isValidRole, type Role } from "@/lib/rbac";
+import { resolveInvitationPolicy } from "@/lib/user-invitation-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -61,19 +62,20 @@ export async function POST(request: Request) {
   if (!email || !email.includes("@") || !role || !isValidRole(role) || !temporaryPassword || temporaryPassword.length < 8) {
     return NextResponse.json({ error: "Completá un email, un rol y una contraseña provisoria de al menos 8 caracteres." }, { status: 400 });
   }
-  if (requester.role === "ceo" && role === "admin") {
-    return NextResponse.json({ error: "Un CEO no puede crear usuarios Administradores." }, { status: 403 });
-  }
 
-  let areaId = body.areaId?.trim() || null;
+  const requestedAreaId = body.areaId?.trim() || null;
   const teamId = body.teamId?.trim() || null;
-  if (requester.role === "manager") {
-    if (!requester.area_id) return NextResponse.json({ error: "El jefe de área no tiene un área asignada." }, { status: 403 });
-    if (body.areaId && body.areaId !== requester.area_id) {
-      return NextResponse.json({ error: "No podés asignar usuarios fuera de tu área." }, { status: 403 });
-    }
-    areaId = requester.area_id;
+  const invitationPolicy = resolveInvitationPolicy({
+    requesterRole: requester.role as Role,
+    requestedRole: role,
+    requesterAreaId: requester.area_id,
+    requestedAreaId,
+  });
+  if (!invitationPolicy.allowed) {
+    return NextResponse.json({ error: invitationPolicy.error }, { status: invitationPolicy.status });
   }
+  const { role: authorizedRole, areaId } = invitationPolicy;
+
   if (teamId) {
     const { data: team } = await adminClient.from("teams").select("area_id").eq("id", teamId).maybeSingle();
     if (!team || team.area_id !== areaId) {
@@ -95,7 +97,7 @@ export async function POST(request: Request) {
   const { error: profileError } = await adminClient.from("profiles").upsert({
     id: createdUser.user.id,
     full_name: fullName,
-    role: role as Role,
+    role: authorizedRole,
     area_id: areaId,
     team_id: teamId,
     must_change_password: true,
