@@ -202,12 +202,21 @@ export function RoleDashboard({ role }: { role: Role }) {
 
       setEmail(data.user.email ?? "");
       setCurrentUserId(data.user.id);
-      const [{ data: taskData, error: taskQueryError }, { data: optionData }] = await Promise.all([
+      const [
+        { data: taskData, error: taskQueryError },
+        { data: optionData, error: taskOptionsQueryError },
+      ] = await Promise.all([
         client.rpc("list_tasks"),
         client.rpc("list_task_options"),
       ]);
-      if (taskQueryError) setTaskError(taskQueryError.message);
-      else setTasks((taskData ?? []) as Task[]);
+      const taskLoadErrors = [
+        taskQueryError?.message,
+        taskOptionsQueryError
+          ? `No se pudieron cargar las opciones de tareas: ${taskOptionsQueryError.message}`
+          : null,
+      ].filter(Boolean);
+      setTaskError(taskLoadErrors.join(" "));
+      if (!taskQueryError) setTasks((taskData ?? []) as Task[]);
       setTaskAreas((optionData?.areas ?? []) as TaskOption[]);
       setTaskTeams((optionData?.teams ?? []) as TaskOption[]);
       setTaskAssignees((optionData?.assignees ?? []) as TaskOption[]);
