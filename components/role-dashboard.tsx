@@ -514,7 +514,7 @@ export function RoleDashboard({ role }: { role: Role }) {
     if (!supabase) return;
     setStructureError("");
     const { error } = await supabase.rpc("update_team_responsible", {
-      team_id: teamId,
+      target_team_id: teamId,
       target_user_id: userId || null,
     });
     if (error) {
