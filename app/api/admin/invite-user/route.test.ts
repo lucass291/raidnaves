@@ -45,6 +45,17 @@ function requestToInviteUser() {
   });
 }
 
+function requestWithRawBody(method: "POST" | "DELETE", body: string) {
+  return new Request("http://localhost/api/admin/invite-user", {
+    method,
+    headers: {
+      authorization: "Bearer test-access-token",
+      "content-type": "application/json",
+    },
+    body,
+  });
+}
+
 function configureClients({
   requesterRole,
   requesterError = null,
@@ -161,6 +172,17 @@ describe("DELETE /api/admin/invite-user", () => {
     });
     expect(deleteUser).not.toHaveBeenCalled();
   });
+
+  it("returns a bad request for malformed JSON", async () => {
+    configureClients({ requesterRole: "admin" });
+
+    const response = await DELETE(requestWithRawBody("DELETE", "{"));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "El cuerpo de la solicitud no es válido.",
+    });
+  });
 });
 
 describe("POST /api/admin/invite-user", () => {
@@ -191,5 +213,29 @@ describe("POST /api/admin/invite-user", () => {
       error: "No se pudo crear el perfil: profile save failed. Tampoco se pudo limpiar el usuario creado: cleanup failed",
     });
     expect(deleteUser).toHaveBeenCalledWith("new-user-1");
+  });
+
+  it("returns a bad request for malformed JSON without creating an account", async () => {
+    const { createUser } = configureInvitationClients(null);
+
+    const response = await POST(requestWithRawBody("POST", "{"));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "El cuerpo de la solicitud no es válido.",
+    });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it.each(["null", "[]"])("rejects non-object JSON bodies (%s)", async (body) => {
+    const { createUser } = configureInvitationClients(null);
+
+    const response = await POST(requestWithRawBody("POST", body));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "El cuerpo de la solicitud no es válido.",
+    });
+    expect(createUser).not.toHaveBeenCalled();
   });
 });
