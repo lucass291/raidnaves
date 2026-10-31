@@ -37,6 +37,7 @@ import {
   taskAssignmentAfterTeamChange,
   type TaskOption,
 } from "@/lib/task-assignment";
+import { formatDateKey, isTaskOverdue } from "@/lib/task-dates";
 import { supabase } from "@/lib/supabase";
 
 const pieColors = ["#00C878", "#2A9D8F", "#9CA3AF", "#252A31"];
@@ -76,12 +77,6 @@ const formatRelativeTime = (timestamp: string) => {
     Math.round(elapsedSeconds / selectedUnit.seconds),
     selectedUnit.unit,
   );
-};
-const dateKey = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 };
 
 type AdminUser = {
@@ -595,15 +590,12 @@ export function RoleDashboard({ role }: { role: Role }) {
     });
   }, [taskAreaFilter, taskDueFrom, taskDueTo, taskFilter, taskTeamFilter, tasks]);
   const taskMetrics = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
     return {
       total: visibleTasks.length,
       pending: visibleTasks.filter((task) => task.status === "pending").length,
       inProgress: visibleTasks.filter((task) => task.status === "in_progress").length,
       completed: visibleTasks.filter((task) => task.status === "completed").length,
-      overdue: visibleTasks.filter(
-        (task) => Boolean(task.due_date && task.due_date < today && task.status !== "completed" && task.status !== "cancelled"),
-      ).length,
+      overdue: visibleTasks.filter((task) => isTaskOverdue(task.due_date, task.status)).length,
     };
   }, [visibleTasks]);
   const reportData = useMemo(() => {
@@ -627,13 +619,13 @@ export function RoleDashboard({ role }: { role: Role }) {
     const dayKeys = Array.from({ length: 7 }, (_, index) => {
       const date = new Date(today);
       date.setDate(today.getDate() - (6 - index));
-      return dateKey(date);
+      return formatDateKey(date);
     });
     const dayLabels = ["D", "L", "M", "X", "J", "V", "S"];
     const performanceData = dayKeys.map((key) => ({
       day: dayLabels[new Date(`${key}T12:00:00`).getDay()],
       value: visibleTasks.filter(
-        (task) => task.status === "completed" && dateKey(new Date(task.updated_at || task.created_at)) === key,
+        (task) => task.status === "completed" && formatDateKey(new Date(task.updated_at || task.created_at)) === key,
       ).length,
     }));
     const workloadData = areaGroups.map((name) => ({
@@ -1195,7 +1187,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                     </span>
                     {task.due_date ? (
                       <span className={`ml-auto text-xs ${
-                        task.due_date < new Date().toISOString().slice(0, 10) && task.status !== "completed" && task.status !== "cancelled"
+                        isTaskOverdue(task.due_date, task.status)
                           ? "text-red-300"
                           : "text-[#9CA3AF]"
                       }`}>
