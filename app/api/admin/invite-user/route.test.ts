@@ -162,6 +162,7 @@ describe("DELETE /api/admin/invite-user", () => {
     expect(deleteUser).not.toHaveBeenCalled();
   });
 });
+
 describe("POST /api/admin/invite-user", () => {
   beforeEach(() => {
     vi.resetAllMocks();
