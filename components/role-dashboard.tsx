@@ -78,6 +78,7 @@ type Area = {
   manager_name: string | null;
   manager_role: string | null;
 };
+type TeamMember = { id: string; full_name: string | null };
 type Team = {
   id: string;
   area_id: string;
@@ -86,6 +87,7 @@ type Team = {
   responsible_id: string | null;
   responsible_name: string | null;
   responsible_role: string | null;
+  members?: TeamMember[];
 };
 type Task = {
   id: string; title: string; description: string | null; status: string; priority: string;
@@ -99,6 +101,7 @@ export function RoleDashboard({ role }: { role: Role }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
+  const [currentUserTeamId, setCurrentUserTeamId] = useState("");
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersError, setUsersError] = useState("");
@@ -163,7 +166,7 @@ export function RoleDashboard({ role }: { role: Role }) {
       }
 
       const [{ data: profile }, { data: authProfile }] = await Promise.all([
-        client.from("profiles").select("role, full_name, area_id, must_change_password").eq("id", data.user.id).maybeSingle(),
+        client.from("profiles").select("role, full_name, area_id, team_id, must_change_password").eq("id", data.user.id).maybeSingle(),
         client.rpc("get_my_profile").maybeSingle(),
       ]);
 
@@ -209,8 +212,19 @@ export function RoleDashboard({ role }: { role: Role }) {
             setTeamAreaId((structure?.areas?.[0]?.id as string | undefined) ?? "");
           }
         } else {
-          const managerAreaId = (profile as { area_id?: string | null } | null)?.area_id;
-          setManagerAreaId(managerAreaId ?? "");
+          const managerProfile = profile as { area_id?: string | null; team_id?: string | null } | null;
+          const areaId = managerProfile?.area_id ?? "";
+          setManagerAreaId(areaId);
+          setCurrentUserTeamId(managerProfile?.team_id ?? "");
+          const { data: structure, error: structureQueryError } = await client.rpc("list_manager_structure");
+          if (structureQueryError) {
+            setStructureError(structureQueryError.message);
+          } else {
+            const managerAreas = (structure?.areas ?? []) as Area[];
+            setAreas(managerAreas);
+            setTeams((structure?.teams ?? []) as Team[]);
+            setTeamAreaId(areaId);
+          }
         }
       }
 
@@ -400,7 +414,7 @@ export function RoleDashboard({ role }: { role: Role }) {
 
   const refreshStructure = async () => {
     if (!supabase) return;
-    const { data, error } = await supabase.rpc("list_admin_structure");
+    const { data, error } = await supabase.rpc(managerView ? "list_manager_structure" : "list_admin_structure");
     if (error) {
       setStructureError(error.message);
       return;
@@ -429,10 +443,11 @@ export function RoleDashboard({ role }: { role: Role }) {
 
   const handleCreateTeam = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!supabase || !teamAreaId || !teamName.trim()) return;
+    const areaId = managerView ? managerAreaId : teamAreaId;
+    if (!supabase || !areaId || !teamName.trim()) return;
     setStructureError("");
     const { error } = await supabase.rpc("create_team", {
-      team_area_id: teamAreaId,
+      team_area_id: areaId,
       team_name: teamName,
       team_description: null,
     });
@@ -611,13 +626,25 @@ export function RoleDashboard({ role }: { role: Role }) {
         trend: formatPercent(areaTotal ? (areaCompleted / areaTotal) * 100 : 0),
       };
     });
-    const teamFeed = visibleTasks.slice(0, 3).map((task) =>
+    const teamFeed = [...visibleTasks]
+      .sort(
+        (first, second) =>
+          new Date(second.updated_at || second.created_at).getTime() -
+          new Date(first.updated_at || first.created_at).getTime(),
+      )
+      .map((task) =>
       `${task.status === "completed" ? "Se completó" : "Se actualizó"} «${task.title}»${task.area_name ? ` · ${task.area_name}` : ""}.`,
-    );
+      );
+    const priorityRank: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
     const priorityItems = visibleTasks
       .filter((task) => task.status !== "completed" && task.status !== "cancelled")
-      .sort((first, second) => (first.due_date ?? "9999-12-31").localeCompare(second.due_date ?? "9999-12-31"))
-      .slice(0, 3)
+      .sort((first, second) => {
+        const priorityDifference = (priorityRank[first.priority] ?? 4) - (priorityRank[second.priority] ?? 4);
+        if (priorityDifference !== 0) return priorityDifference;
+        const dueDateDifference = (first.due_date ?? "9999-12-31").localeCompare(second.due_date ?? "9999-12-31");
+        if (dueDateDifference !== 0) return dueDateDifference;
+        return new Date(second.created_at).getTime() - new Date(first.created_at).getTime();
+      })
       .map((task) => ({ name: task.title, owner: task.assignee_name ?? "Sin asignar", status: taskStatusLabels[task.status] ?? task.status }));
     const summary = {
       admin: { label: "Operaciones visibles", value: String(total), trend: formatPercent(completionRate), detail: `${completed} completadas · ${pending + inProgress} abiertas` },
@@ -873,7 +900,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                   </div>
                   <span className="hidden text-sm text-[#00C878] sm:block">{formatPercent(completionRate)} completadas</span>
                 </div>
-                <div className="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
+                <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
                   <div className="h-56 sm:h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={performanceData}>
@@ -893,7 +920,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="rounded-xl border border-[#252A31] bg-[#14171C] p-3 sm:p-4">
+                  <div className="min-w-0 overflow-hidden rounded-xl border border-[#252A31] bg-[#14171C] p-3 sm:p-4">
                     <p className="text-sm font-medium">Distribución por área</p>
                     <p className="mt-1 text-xs text-[#9CA3AF]">Tareas por sector</p>
                     <div className="h-52">
@@ -915,14 +942,14 @@ export function RoleDashboard({ role }: { role: Role }) {
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#252A31] pt-3">
+                    <div className="mt-2 grid grid-cols-1 gap-2 border-t border-[#252A31] pt-3 sm:grid-cols-2">
                       {workloadData.map((item, index) => (
-                        <div key={item.name} className="flex min-w-0 items-center justify-between gap-2 text-xs">
-                          <span className="flex items-center gap-2 text-[#9CA3AF]">
+                        <div key={item.name} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs">
+                          <span className="flex min-w-0 flex-1 items-center gap-2 text-[#9CA3AF]">
                             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: pieColors[index] }} />
-                            <span className="truncate">{item.name}</span>
+                            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{item.name}</span>
                           </span>
-                          <span>{item.value}%</span>
+                          <span className="shrink-0">{item.value}%</span>
                         </div>
                       ))}
                     </div>
@@ -965,7 +992,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                   <h3 className="text-lg font-semibold">Actividad reciente</h3>
                   <ArrowRight className="h-4 w-4 text-[#9CA3AF]" />
                 </div>
-                <ul className="mt-4 space-y-3">
+                <ul className="dashboard-scrollbar mt-4 max-h-96 space-y-3 overflow-y-auto pr-2">
                   {teamFeed.map((item, index) => (
                     <li key={item} className="flex gap-3 rounded-xl border border-[#252A31] bg-[#14171C] p-3">
                       <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[#00C878]" />
@@ -980,7 +1007,7 @@ export function RoleDashboard({ role }: { role: Role }) {
 
               <div className="rounded-2xl border border-[#252A31] bg-[#0B0D10] p-5">
                 <h3 className="text-lg font-semibold">Prioridades</h3>
-                <ul className="mt-4 space-y-3">
+                <ul className="mt-4 max-h-96 space-y-3 overflow-y-auto">
                   {priorityItems.map((item) => (
                     <li key={item.name} className="flex items-center justify-between rounded-xl border border-[#252A31] bg-[#14171C] p-3">
                       <div>
@@ -1159,28 +1186,36 @@ export function RoleDashboard({ role }: { role: Role }) {
               </div>
 
               <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                <form onSubmit={handleCreateArea} className="flex gap-2">
-                  <input
-                    required
-                    value={areaName}
-                    onChange={(event) => setAreaName(event.target.value)}
-                    className="min-w-0 flex-1 rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
-                    placeholder="Nueva área"
-                  />
-                  <button type="submit" className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10]">
-                    Crear área
-                  </button>
-                </form>
-                <form onSubmit={handleCreateTeam} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                  <select
-                    required
-                    value={teamAreaId}
-                    onChange={(event) => setTeamAreaId(event.target.value)}
-                    className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
-                  >
-                    <option value="" disabled>Elegí un área</option>
-                    {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
-                  </select>
+                {adminView ? (
+                  <form onSubmit={handleCreateArea} className="flex gap-2">
+                    <input
+                      required
+                      value={areaName}
+                      onChange={(event) => setAreaName(event.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                      placeholder="Nueva área"
+                    />
+                    <button type="submit" className="rounded-lg bg-[#00C878] px-4 py-2 text-sm font-semibold text-[#0B0D10]">
+                      Crear área
+                    </button>
+                  </form>
+                ) : null}
+                <form onSubmit={handleCreateTeam} className={`grid gap-2 ${adminView ? "sm:grid-cols-[1fr_1fr_auto]" : "sm:grid-cols-[1fr_auto]"}`}>
+                  {adminView ? (
+                    <select
+                      required
+                      value={teamAreaId}
+                      onChange={(event) => setTeamAreaId(event.target.value)}
+                      className="rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#F5F5F5] outline-none focus:border-[#00C878]"
+                    >
+                      <option value="" disabled>Elegí un área</option>
+                      {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+                    </select>
+                  ) : (
+                    <p className="flex items-center rounded-lg border border-[#252A31] bg-[#14171C] px-3 py-2 text-sm text-[#9CA3AF]">
+                      Área: {areas[0]?.name ?? "Tu área"}
+                    </p>
+                  )}
                   <input
                     required
                     value={teamName}
@@ -1200,6 +1235,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                 </p>
               ) : null}
 
+              {adminView ? (
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 {areas.map((area) => (
                   <div key={area.id} className="rounded-xl border border-[#252A31] bg-[#14171C] p-4">
@@ -1252,6 +1288,55 @@ export function RoleDashboard({ role }: { role: Role }) {
                   </div>
                 ))}
               </div>
+              ) : (
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {teams.map((team) => (
+                    <article
+                      key={team.id}
+                      className={`rounded-xl border bg-[#14171C] p-4 ${
+                        team.id === currentUserTeamId ? "border-[#00C878]/50" : "border-[#252A31]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">{team.name}</p>
+                          <p className="mt-1 text-xs text-[#9CA3AF]">{areas[0]?.name ?? "Tu área"}</p>
+                        </div>
+                        {team.id === currentUserTeamId ? (
+                          <span className="shrink-0 rounded-full bg-[#00C878]/10 px-2.5 py-1 text-xs text-[#00C878]">
+                            Tu equipo
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-4 rounded-lg border border-[#252A31] bg-[#0B0D10] px-3 py-2">
+                        <p className="text-xs text-[#9CA3AF]">Jefe de área</p>
+                        <p className="mt-1 text-sm text-[#F5F5F5]">{areas[0]?.manager_name ?? "Sin asignar"}</p>
+                      </div>
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs uppercase tracking-wide text-[#9CA3AF]">Trabajadores</p>
+                          <span className="text-xs text-[#9CA3AF]">{team.members?.length ?? 0}</span>
+                        </div>
+                        {team.members?.length ? (
+                          <ul className="mt-2 space-y-2">
+                            {team.members.map((member) => (
+                              <li key={member.id} className="flex items-center gap-2 text-sm text-[#C5CBD3]">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#00C878]" />
+                                {member.full_name || "Sin nombre"}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-2 text-sm text-[#6B7280]">Todavía no hay trabajadores asignados.</p>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                  {teams.length === 0 ? (
+                    <p className="text-sm text-[#9CA3AF]">Todavía no hay equipos en tu área. Creá el primero desde este apartado.</p>
+                  ) : null}
+                </div>
+              )}
             </section>
           ) : null}
 
