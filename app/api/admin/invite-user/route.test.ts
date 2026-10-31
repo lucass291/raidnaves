@@ -8,7 +8,7 @@ vi.mock("@supabase/supabase-js", () => ({
   createClient: createClientMock,
 }));
 
-import { DELETE } from "./route";
+import { DELETE, POST } from "./route";
 
 function profileQuery(result: { data: unknown; error: { message: string } | null }) {
   const maybeSingle = vi.fn().mockResolvedValue(result);
@@ -26,6 +26,22 @@ function requestToDeleteUser(userId = "target-1") {
       "content-type": "application/json",
     },
     body: JSON.stringify({ userId }),
+  });
+}
+
+function requestToInviteUser() {
+  return new Request("http://localhost/api/admin/invite-user", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer valid-token",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      email: "worker@example.com",
+      fullName: "Trabajador",
+      role: "worker",
+      temporaryPassword: "temporary-password",
+    }),
   });
 }
 
@@ -63,6 +79,34 @@ function configureClients({
     });
 
   return { deleteUser, requester, target };
+}
+
+function configureInvitationClients(cleanupError: { message: string } | null) {
+  const getUser = vi.fn().mockResolvedValue({
+    data: { user: { id: "requester-1" } },
+    error: null,
+  });
+  const requester = profileQuery({
+    data: { role: "admin", area_id: null },
+    error: null,
+  });
+  const createUser = vi.fn().mockResolvedValue({
+    data: { user: { id: "new-user-1" } },
+    error: null,
+  });
+  const deleteUser = vi.fn().mockResolvedValue({ error: cleanupError });
+  const upsert = vi.fn().mockResolvedValue({ error: { message: "profile save failed" } });
+  const adminFrom = vi.fn(() => ({ upsert }));
+
+  createClientMock
+    .mockReturnValueOnce({ auth: { getUser } })
+    .mockReturnValueOnce({
+      auth: { admin: { createUser, deleteUser } },
+      from: adminFrom,
+    })
+    .mockReturnValueOnce({ from: requester.from });
+
+  return { createUser, deleteUser, upsert };
 }
 
 describe("DELETE /api/admin/invite-user", () => {
@@ -116,5 +160,36 @@ describe("DELETE /api/admin/invite-user", () => {
       error: "El CEO no puede modificar al administrador.",
     });
     expect(deleteUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/admin/invite-user", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key");
+  });
+
+  it("deletes the Auth account when saving its profile fails", async () => {
+    const { deleteUser } = configureInvitationClients(null);
+
+    const response = await POST(requestToInviteUser());
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "profile save failed" });
+    expect(deleteUser).toHaveBeenCalledWith("new-user-1");
+  });
+
+  it("reports both errors when profile save and account cleanup fail", async () => {
+    const { deleteUser } = configureInvitationClients({ message: "cleanup failed" });
+
+    const response = await POST(requestToInviteUser());
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "No se pudo crear el perfil: profile save failed. Tampoco se pudo limpiar el usuario creado: cleanup failed",
+    });
+    expect(deleteUser).toHaveBeenCalledWith("new-user-1");
   });
 });
