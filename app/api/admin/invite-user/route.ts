@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isValidRole, type Role } from "@/lib/rbac";
+import { canDeleteUser, isPrivilegedRole } from "@/lib/user-deletion-policy";
 import { resolveInvitationPolicy } from "@/lib/user-invitation-policy";
 
 export const dynamic = "force-dynamic";
@@ -149,29 +150,48 @@ export async function DELETE(request: Request) {
     .eq("id", authData.user.id)
     .maybeSingle();
 
-  if (requesterError || (requester?.role !== "admin" && requester?.role !== "ceo")) {
+  if (requesterError) {
+    return NextResponse.json({ error: `No se pudo verificar el rol: ${requesterError.message}` }, { status: 500 });
+  }
+
+  if (!requester || !isPrivilegedRole(requester.role)) {
     return NextResponse.json({ error: "Solo un administrador o CEO puede eliminar usuarios." }, { status: 403 });
   }
 
   const body = (await request.json()) as { userId?: string };
   const userId = body.userId?.trim();
 
-  if (!userId || userId === authData.user.id) {
+  if (!userId) {
+    return NextResponse.json({ error: "Debés indicar el usuario que querés eliminar." }, { status: 400 });
+  }
+
+  if (userId === authData.user.id) {
     return NextResponse.json({ error: "No podés eliminar tu propio usuario." }, { status: 400 });
   }
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  let targetRole: string | null = null;
   if (requester.role === "ceo") {
-    const { data: target } = await adminClient
+    const { data: target, error: targetError } = await adminClient
       .from("profiles")
       .select("role")
       .eq("id", userId)
       .maybeSingle();
-    if (target?.role === "admin") {
-      return NextResponse.json({ error: "El CEO no puede modificar al administrador." }, { status: 403 });
+    if (targetError) {
+      return NextResponse.json({ error: `No se pudo verificar el usuario: ${targetError.message}` }, { status: 500 });
     }
+    targetRole = target?.role ?? null;
+  }
+
+  if (!canDeleteUser({
+    requesterRole: requester.role,
+    requesterId: authData.user.id,
+    targetId: userId,
+    targetRole,
+  })) {
+    return NextResponse.json({ error: "El CEO no puede modificar al administrador." }, { status: 403 });
   }
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
 
