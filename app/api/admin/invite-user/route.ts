@@ -104,6 +104,15 @@ export async function POST(request: Request) {
   });
 
   if (profileError) {
+    const { error: cleanupError } = await adminClient.auth.admin.deleteUser(createdUser.user.id);
+    if (cleanupError) {
+      return NextResponse.json(
+        {
+          error: `No se pudo crear el perfil: ${profileError.message}. Tampoco se pudo limpiar el usuario creado: ${cleanupError.message}`,
+        },
+        { status: 500 },
+      );
+    }
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
