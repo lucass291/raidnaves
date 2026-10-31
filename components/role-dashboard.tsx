@@ -493,7 +493,7 @@ export function RoleDashboard({ role }: { role: Role }) {
     if (!supabase) return;
     setStructureError("");
     const { error } = await supabase.rpc("update_area_manager", {
-      area_id: areaId,
+      target_area_id: areaId,
       target_user_id: userId || null,
     });
     if (error) {
